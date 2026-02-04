@@ -6,17 +6,18 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import SinglefileData
+from aiida.orm import SinglefileData, FolderData
 from aiida.plugins import DataFactory
 
-DiffParameters = DataFactory("pymuon")
+UepParameters = DataFactory("pymuon.uep")
 
 
-class DiffCalculation(CalcJob):
+class UepCalculation(CalcJob):
     """
-    AiiDA calculation plugin wrapping the diff executable.
+    AiiDA calculation plugin wrapping the pymuon-suite UEP ooptimisation pipeline.
 
-    Simple AiiDA plugin wrapper for 'diffing' two files.
+    Runs pm-muairss to generate muonated structres, and run pm-uem-opt on each generated structre.
+    Requires: CASTEP charge density file, long gile and crystal structure file.
     """
 
     @classmethod
@@ -29,21 +30,27 @@ class DiffCalculation(CalcJob):
             "num_machines": 1,
             "num_mpiprocs_per_machine": 1,
         }
-        spec.inputs["metadata"]["options"]["parser_name"].default = "pymuon"
+        spec.inputs["metadata"]["options"]["parser_name"].default = "pymuon.uep"
 
         # new ports
         spec.input("metadata.options.output_filename", valid_type=str, default="patch.diff")
         spec.input(
             "parameters",
-            valid_type=DiffParameters,
-            help="Command line parameters for diff",
+            valid_type=UepParameters,
+            help="UEP generation and optimisation parameters.",
         )
-        spec.input("file1", valid_type=SinglefileData, help="First file to be compared.")
-        spec.input("file2", valid_type=SinglefileData, help="Second file to be compared.")
+        spec.input("structure", valid_type=SinglefileData, help="Crystal structure file (CELL CIF or extended XYZ).")
+        spec.input("charge_density", valid_type=SinglefileData, help="CASTEP charge density file. (.den_fmt)")
+        spec.input("castep_log", valid_type=SinglefileData, help="CASTEP log file. (.castep)")
         spec.output(
-            "pymuon",
+            "uep_results",
+            valid_type=FolderData,
+            help="Retrieved output folder containing UEP optimisation results.",
+        )
+        spec.output(
+            "allpos_files",
             valid_type=SinglefileData,
-            help="diff between file1 and file2.",
+            help="file containing all the generated muonated structures. (allpos format)",
         )
 
         spec.exit_code(
@@ -52,6 +59,11 @@ class DiffCalculation(CalcJob):
             message="Calculation did not produce all expected output files.",
         )
 
+        spec.exit_code(
+            310,
+            "ERROR_ALL_OPTIMIZATIONS_FAILED",
+            message="All UEP optimizations failed.",
+        )
     def prepare_for_submission(self, folder):
         """
         Create input files.
@@ -60,28 +72,99 @@ class DiffCalculation(CalcJob):
             needed by the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
+
+        # Determine the structure file name
+        structure_ext = self.inputs.structure.filename.rsplit(".", 1)[-1]
+        internal_structure_name = f"structure.{structure_ext}"
+
+        # Write params.yaml
+        params_content = self.inputs.parameters.render_yaml()
+        with folder.open("params.yaml", "w") as params_file:
+            params_file.write(params_content)
+
+
+        # Set up the main commaind: pm-muairss -t -w <structure> params.yaml
         codeinfo = datastructures.CodeInfo()
-        codeinfo.cmdline_params = self.inputs.parameters.cmdline_params(
-            file1_name=self.inputs.file1.filename, file2_name=self.inputs.file2.filename
-        )
+        codeinfo.cmdline_params = ["-t", "-w", internal_structure_name, "params.yaml"]
         codeinfo.code_uuid = self.inputs.code.uuid
-        codeinfo.stdout_name = self.metadata.options.output_filename
+        codeinfo.stdout_name = "pm-muairss.stdout"
+        codeinfo.stderr_name = "pm-muairss.stderr"
 
         # Prepare a `CalcInfo` to be returned to the engine
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.local_copy_list = [
             (
-                self.inputs.file1.uuid,
-                self.inputs.file1.filename,
-                self.inputs.file1.filename,
+                self.inputs.structure.uuid,
+                self.inputs.structure.filename,
+                internal_structure_name,
             ),
             (
-                self.inputs.file2.uuid,
-                self.inputs.file2.filename,
-                self.inputs.file2.filename,
+                self.inputs.charge_density.uuid,
+                self.inputs.charge_density.filename,
+                "inpu_structure.den_fmt",
+            ),
+            (
+                self.inputs.castep_log.uuid,
+                self.inputs.castep_log.filename,
+                "inpu_structure.castep",
             ),
         ]
-        calcinfo.retrieve_list = [self.metadata.options.output_filename]
+
+        calcinfo.append_text = self._get_append_text()
+        #post muairss step: run pm-uem-opt on each generated muonated structure
+        calcinfo.retrieve_list = [
+            "muon-airss-out",
+            "params.yaml",
+            "pm_muairss.stdout",
+            "pm_muairss.stderr",
+            "uep_opt.log",
+        ]
+
+        params_dict = self.inputs.parameters.get_dict()
+        if "allpos_ext" in params_dict:
+            ext = params_dict["allpos_ext"]
+            calcinfo.retrieve_list.append(f"allpos.{ext}")
 
         return calcinfo
+    
+    @staticmethod
+    def _get_append_text():
+        """
+        generated bash script after pm-muairss to 
+        Patches generated yaml file to fix charge density paths
+        Run pm-uem-opt on each generated muonated structure
+        """
+        return r"""
+
+OUT_FOLDER = "muon-airss-out"
+
+find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i 's#^chden_path: .*#chden_path: ./#g' {} +
+find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i '$#^chden_seed: .*#chden_seed: input_structure#g' {} +
+
+pids=()
+for yaml_file in "$OUT_FOLDER"/*/*/*.yaml; do
+    pm-uep-opt "$yaml_file" &
+    pids+=($!)
+done
+
+failed=0
+totals=${#pids[@]}
+for pid in "${pids[@]}"; do
+    if ! wait "$pid"; then
+        failed=$((failed + 1))
+    fi
+done
+
+if [ $failed -eq $totals ] && [ "$totals" -gt 0 ]; then
+    echo "ERROR: All optimisation failed ($failed/$totals)" >&2
+    exit 1
+elif [ $failed -gt 0 ]; then
+    echo "WARNING: $failed/$total optimisation(s) failed" >&2
+fi
+
+echo "UEP optimisations completed." > uep_opt.log
+"""
+
+
+

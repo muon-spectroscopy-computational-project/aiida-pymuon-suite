@@ -14,25 +14,78 @@ def test_process(pymuon_code):
     note this does not test that the expected outputs are created of output parsing"""
 
     # Prepare input parameters
-    diff_parameters = DataFactory("pymuon")
-    parameters = diff_parameters({"ignore-case": True})
+    uep_parameters = DataFactory("pymuon")
+    parameters = uep_parameters({
+        "poisson_r": 0.8,
+        "vdw_scale": 0.5,
+        "geom_steps": 30,
+        "geom_force_tol": 0.05,
+        "uep_gw_factor": 5.0
+    })
 
-    file1 = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "file1.txt"))
-    file2 = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "file2.txt"))
+    structure_file = SinglefileData(
+        file=os.path.join(TEST_DIR, "input_files", "si.cell")
+    )
+    charge_density_file = SinglefileData(
+        file=os.path.join(TEST_DIR, "input_files", "si.den_fmt")
+    )
+    castep_log_file = SinglefileData(
+        file=os.path.join(TEST_DIR, "input_files", "si.castep")
+    )  
+
 
     # set up calculation
     inputs = {
-        "code": pymuon_code,
+        "code": uep_code,
         "parameters": parameters,
-        "file1": file1,
-        "file2": file2,
+        "structure": structure_file,
+        "charge_density": charge_density_file,
+        "castep_log": castep_log_file,
         "metadata": {
-            "options": {"max_wallclock_seconds": 30},
+            "options": {"max_wallclock_seconds": 300},
         },
     }
 
-    result = run(CalculationFactory("pymuon"), **inputs)
-    computed_diff = result["pymuon"].get_content()
+    result = run(CalculationFactory("pymuon.uep"), **inputs)
+    assert "uep_results" in result
 
-    assert "content1" in computed_diff
-    assert "content2" in computed_diff
+def test_parameter_validation():
+    uep_parameters = DataFactory("pymuon.uep")
+
+    params = uep_parameters({})
+    assert params["poisson_r"] == 0.5
+    assert params["vdw_scale"] == 1.0
+    assert params["geom_steps"] == 50
+    assert params["geom_force_tol"] == 0.01
+    assert params["uep_gw_factor"] == 3.0
+
+    params = uep_parameters({
+        "poisson_r": 1.0,
+        "vdw_scale": 0.25,
+        "geom_steps": 100,
+        "random_seed": 42,
+        "allpos_ext": "xyz"
+    })
+    assert params["poisson_r"] == 1.0
+    assert params["random_seed"] == 42
+    assert params["allpos_ext"] == "xyz"
+
+def test_render_yaml():
+    uep_parameters = DataFactory("pymuon.uep")
+
+    params = uep_parameters({
+        "poisson_r": 0.7,
+        "vdw_scale": 0.8,
+        "geom_steps": 25,
+        "geom_force_tol": 0.02,
+        "uep_gw_factor": 4.0,
+        "allpos_ext": "cif",
+    })
+
+    yaml_output = params.render_yaml()
+    assert "calcylator: uep" in yaml_output
+    assert "charged: true" in yaml_output
+    assert "out_folder: muon-airss-out" in yaml_output
+    assert "poisson_r: 0.7" in yaml_output
+    assert "allpos_filename: allpos.cif" in yaml_output
+    assert "allpos_ext" not in yaml_output
