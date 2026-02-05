@@ -9,12 +9,12 @@ from aiida.plugins import CalculationFactory, DataFactory
 from . import TEST_DIR
 
 
-def test_process(pymuon_code):
+def test_process(uep_code):
     """Test running a calculation
     note this does not test that the expected outputs are created of output parsing"""
 
     # Prepare input parameters
-    uep_parameters = DataFactory("pymuon")
+    uep_parameters = DataFactory("pymuon.uep")
     parameters = uep_parameters({
         "poisson_r": 0.8,
         "vdw_scale": 0.5,
@@ -53,11 +53,11 @@ def test_parameter_validation():
     uep_parameters = DataFactory("pymuon.uep")
 
     params = uep_parameters({})
-    assert params["poisson_r"] == 0.5
-    assert params["vdw_scale"] == 1.0
-    assert params["geom_steps"] == 50
-    assert params["geom_force_tol"] == 0.01
-    assert params["uep_gw_factor"] == 3.0
+    assert params["poisson_r"] == 0.8
+    assert params["vdw_scale"] == 0.5
+    assert params["geom_steps"] == 30
+    assert params["geom_force_tol"] == 0.05
+    assert params["uep_gw_factor"] == 5.0
 
     params = uep_parameters({
         "poisson_r": 1.0,
@@ -83,7 +83,7 @@ def test_render_yaml():
     })
 
     yaml_output = params.render_yaml()
-    assert "calcylator: uep" in yaml_output
+    assert "calculator: uep" in yaml_output
     assert "charged: true" in yaml_output
     assert "out_folder: muon-airss-out" in yaml_output
     assert "poisson_r: 0.7" in yaml_output

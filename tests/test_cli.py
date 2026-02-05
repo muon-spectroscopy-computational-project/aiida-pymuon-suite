@@ -2,7 +2,7 @@
 
 from aiida.plugins import DataFactory
 from click.testing import CliRunner
-from aiida-pymuon-suite.cli import export, list_
+from aiida_pymuon_suite.cli import export, list_
 
 
 # pylint: disable=attribute-defined-outside-init
@@ -11,8 +11,8 @@ class TestDataCli:
 
     def setup_method(self):
         """Prepare nodes for cli tests."""
-        diff_parameters = DataFactory("pymuon")
-        self.parameters = diff_parameters({"ignore-case": True})
+        UepParameters = DataFactory("pymuon.uep")
+        self.parameters = UepParameters({"poisson_r": 1.0})
         self.parameters.store()
         self.runner = CliRunner()
 
@@ -31,4 +31,4 @@ class TestDataCli:
         we have set up.
         """
         result = self.runner.invoke(export, [str(self.parameters.pk)], catch_exceptions=False)
-        assert "ignore-case" in result.output
+        assert "poisson_r" in result.output

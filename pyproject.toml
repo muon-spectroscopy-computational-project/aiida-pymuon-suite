@@ -22,7 +22,8 @@ keywords = ["aiida", "plugin"]
 requires-python = ">=3.9"
 dependencies = [
     "aiida-core>=2.5,<3",
-    "voluptuous"
+    "voluptuous",
+    "pyyaml"
 ]
 
 [project.optional-dependencies]
@@ -41,16 +42,16 @@ docs = [
 Source = "https://github.com/subindev-d/aiida-pymuon-suite"
 
 [project.entry-points."aiida.data"]
-"pymuon" = "aiida-pymuon-suite.data:DiffParameters"
+"pymuon.uep" = "aiida_pymuon_suite.data:UepParameters"
 
 [project.entry-points."aiida.calculations"]
-"pymuon" = "aiida-pymuon-suite.calculations:DiffCalculation"
+"pymuon.uep" = "aiida_pymuon_suite.calculations:UepCalculation"
 
 [project.entry-points."aiida.parsers"]
-"pymuon" = "aiida-pymuon-suite.parsers:DiffParser"
+"pymuon.uep" = "aiida_pymuon_suite.parsers:UepParser"
 
 [project.entry-points."aiida.cmdline.data"]
-"pymuon" = "aiida-pymuon-suite.cli:data_cli"
+"pymuon.uep" = "aiida_pymuon_suite.cli:data_cli"
 
 [tool.pytest.ini_options]
 # Configuration for [pytest](https://docs.pytest.org)
@@ -67,7 +68,7 @@ filterwarnings = [
 [tool.coverage.run]
 # Configuration of [coverage.py](https://coverage.readthedocs.io)
 # reporting which lines of your plugin are covered by tests
-source = ["src/aiida-pymuon-suite"]
+source = ["src/aiida_pymuon_suite"]
 
 [tool.ruff]
 line-length = 120
@@ -100,7 +101,7 @@ select = [
 ## Hatch configurations
 
 [tool.hatch.version]
-path = "src/aiida-pymuon-suite/__init__.py"
+path = "src/aiida_pymuon_suite/__init__.py"
 
 [tool.hatch.envs.hatch-test]
 dependencies = [

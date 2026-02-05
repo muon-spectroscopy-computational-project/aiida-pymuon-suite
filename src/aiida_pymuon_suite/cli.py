@@ -17,9 +17,9 @@ from aiida.plugins import DataFactory
 
 
 # See aiida.cmdline.data entry point in setup.json
-@verdi_data.group("pymuon")
+@verdi_data.group("pymuon-uep")
 def data_cli():
-    """Command line interface for aiida-pymuon-suite"""
+    """Command line interface for aiida-pymuon-suite UEP data"""
 
 
 @data_cli.command("list")
@@ -28,7 +28,7 @@ def list_():  # pylint: disable=redefined-builtin
     """
     Display all DiffParameters nodes
     """
-    diff_parameters = DataFactory("pymuon")
+    diff_parameters = DataFactory("pymuon.uep")
 
     qb = QueryBuilder()
     qb.append(diff_parameters)
@@ -51,7 +51,7 @@ def list_():  # pylint: disable=redefined-builtin
 )
 @decorators.with_dbenv()
 def export(node, outfile):
-    """Export a DiffParameters node (identified by PK, UUID or label) to plain text."""
+    """Export a UepParameters node (identified by PK, UUID or label) to plain text."""
     string = str(node)
 
     if outfile:

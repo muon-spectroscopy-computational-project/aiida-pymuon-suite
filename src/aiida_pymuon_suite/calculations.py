@@ -85,7 +85,7 @@ class UepCalculation(CalcJob):
 
         # Set up the main commaind: pm-muairss -t -w <structure> params.yaml
         codeinfo = datastructures.CodeInfo()
-        codeinfo.cmdline_params = ["-t", "-w", internal_structure_name, "params.yaml"]
+        codeinfo.cmdline_params = ["-t", "w", internal_structure_name, "params.yaml"]
         codeinfo.code_uuid = self.inputs.code.uuid
         codeinfo.stdout_name = "pm-muairss.stdout"
         codeinfo.stderr_name = "pm-muairss.stderr"
@@ -102,12 +102,12 @@ class UepCalculation(CalcJob):
             (
                 self.inputs.charge_density.uuid,
                 self.inputs.charge_density.filename,
-                "inpu_structure.den_fmt",
+                "input_structure.den_fmt",
             ),
             (
                 self.inputs.castep_log.uuid,
                 self.inputs.castep_log.filename,
-                "inpu_structure.castep",
+                "input_structure.castep",
             ),
         ]
 
@@ -137,10 +137,10 @@ class UepCalculation(CalcJob):
         """
         return r"""
 
-OUT_FOLDER = "muon-airss-out"
+OUT_FOLDER="muon-airss-out"
 
 find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i 's#^chden_path: .*#chden_path: ./#g' {} +
-find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i '$#^chden_seed: .*#chden_seed: input_structure#g' {} +
+find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i 's#^chden_seed: .*#chden_seed: input_structure#g' {} +
 
 pids=()
 for yaml_file in "$OUT_FOLDER"/*/*/*.yaml; do
@@ -160,7 +160,7 @@ if [ $failed -eq $totals ] && [ "$totals" -gt 0 ]; then
     echo "ERROR: All optimisation failed ($failed/$totals)" >&2
     exit 1
 elif [ $failed -gt 0 ]; then
-    echo "WARNING: $failed/$total optimisation(s) failed" >&2
+    echo "WARNING: $failed/$totals optimisation(s) failed" >&2
 fi
 
 echo "UEP optimisations completed." > uep_opt.log

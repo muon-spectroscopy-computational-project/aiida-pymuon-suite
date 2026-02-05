@@ -47,14 +47,15 @@ class UepParser(Parser):
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
         
         #check UEP optimisation results(.uep files)
-        uep_files = [f for f in self.retrieved.list.object_names("muon-airss-out") if f.endswith(".uep")]
+        uep_files = [f for f in self.retrieved.list_object_names("muon-airss-out") if f.endswith(".uep")]
         if not uep_files:
             self.logger.error("No UEP optimisation output files (.uep) found in 'muon-airss-out' all optimisation failed.")
-            return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
-        
+            return self.exit_codes.ERROR_ALL_OPTIMIZATIONS_FAILED
+    
+
         # count structure for logging
         struct_dirs = set()
-        for f in self.retrieved.list.object_names("muon-airss-out", True):
+        for f in self.retrieved.list_object_names("muon-airss-out", True):
             parts = f.split("/")
             if len(parts) >= 3:
                 struct_dirs.add(parts[1])
@@ -64,7 +65,7 @@ class UepParser(Parser):
 
         #handl opitional allpos file
 
-        allpos_files = [f for f in self.retrieved if f.sstartswith("allpos.")]
+        allpos_files = [f for f in self.retrieved if f.startswith("allpos.")]
         if allpos_files:
             with self.retrieved.open(allpos_files[0], "rb") as handle:
                 allpos_node = SinglefileData(file=handle)
