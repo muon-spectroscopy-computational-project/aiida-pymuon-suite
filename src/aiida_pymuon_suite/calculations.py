@@ -6,7 +6,7 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import SinglefileData, FolderData
+from aiida.orm import SinglefileData
 from aiida.plugins import DataFactory
 
 UepParameters = DataFactory("pymuon.uep")
@@ -42,11 +42,6 @@ class UepCalculation(CalcJob):
         spec.input("structure", valid_type=SinglefileData, help="Crystal structure file (CELL CIF or extended XYZ).")
         spec.input("charge_density", valid_type=SinglefileData, help="CASTEP charge density file. (.den_fmt)")
         spec.input("castep_log", valid_type=SinglefileData, help="CASTEP log file. (.castep)")
-        spec.output(
-            "uep_results",
-            valid_type=FolderData,
-            help="Retrieved output folder containing UEP optimisation results.",
-        )
         spec.output(
             "allpos_files",
             valid_type=SinglefileData,
@@ -116,8 +111,8 @@ class UepCalculation(CalcJob):
         calcinfo.retrieve_list = [
             "muon-airss-out",
             "params.yaml",
-            "pm_muairss.stdout",
-            "pm_muairss.stderr",
+            "pm-muairss.stdout",
+            "pm-muairss.stderr",
             "uep_opt.log",
         ]
 

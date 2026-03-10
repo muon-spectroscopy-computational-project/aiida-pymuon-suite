@@ -9,8 +9,21 @@ from aiida.engine import ExitCode
 from aiida.orm import SinglefileData
 from aiida.parsers.parser import Parser
 from aiida.plugins import CalculationFactory
+from aiida.repository import FileType
 
 UepCalculation = CalculationFactory("pymuon.uep")
+
+
+def _list_files_recursive(folder_data, path=None):
+    """Return list of all file paths (relative to folder root) under path."""
+    results = []
+    for obj in folder_data.list_objects(path):
+        obj_path = f"{path}/{obj.name}" if path else obj.name
+        if obj.file_type == FileType.DIRECTORY:
+            results.extend(_list_files_recursive(folder_data, obj_path))
+        else:
+            results.append(obj_path)
+    return results
 
 
 class UepParser(Parser):
@@ -47,25 +60,23 @@ class UepParser(Parser):
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
         
         #check UEP optimisation results(.uep files)
-        uep_files = [f for f in self.retrieved.list_object_names("muon-airss-out") if f.endswith(".uep")]
+        all_files = _list_files_recursive(self.retrieved, "muon-airss-out")
+        uep_files = [f for f in all_files if f.endswith(".uep")]
         if not uep_files:
             self.logger.error("No UEP optimisation output files (.uep) found in 'muon-airss-out' all optimisation failed.")
             return self.exit_codes.ERROR_ALL_OPTIMIZATIONS_FAILED
-    
 
         # count structure for logging
         struct_dirs = set()
-        for f in self.retrieved.list_object_names("muon-airss-out", True):
+        for f in all_files:
             parts = f.split("/")
             if len(parts) >= 3:
                 struct_dirs.add(parts[1])
         self.logger.info(f"Found {len(uep_files)} UEP optimisation output files (.uep) for {len(struct_dirs)} muonated structures.")
-        #output the retrieved folder as upe_results
-        self.out("uep_results", self.retrieved)
 
         #handl opitional allpos file
 
-        allpos_files = [f for f in self.retrieved if f.startswith("allpos.")]
+        allpos_files = [f for f in self.retrieved.list_object_names() if f.startswith("allpos.")]
         if allpos_files:
             with self.retrieved.open(allpos_files[0], "rb") as handle:
                 allpos_node = SinglefileData(file=handle)

@@ -24,13 +24,13 @@ def test_process(uep_code):
     })
 
     structure_file = SinglefileData(
-        file=os.path.join(TEST_DIR, "input_files", "si.cell")
+        file=os.path.join(TEST_DIR, "input_files", "Si.cell")
     )
     charge_density_file = SinglefileData(
-        file=os.path.join(TEST_DIR, "input_files", "si.den_fmt")
+        file=os.path.join(TEST_DIR, "input_files", "Si.den_fmt")
     )
     castep_log_file = SinglefileData(
-        file=os.path.join(TEST_DIR, "input_files", "si.castep")
+        file=os.path.join(TEST_DIR, "input_files", "Si.castep")
     )  
 
 
@@ -47,7 +47,7 @@ def test_process(uep_code):
     }
 
     result = run(CalculationFactory("pymuon.uep"), **inputs)
-    assert "uep_results" in result
+    assert "retrieved" in result
 
 def test_parameter_validation():
     uep_parameters = DataFactory("pymuon.uep")
