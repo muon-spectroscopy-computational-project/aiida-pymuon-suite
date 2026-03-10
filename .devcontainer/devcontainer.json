@@ -1,0 +1,15 @@
+  {
+    "name": "aiida-pymuon-suite dev",
+    "image": "aiidateam/aiida-core-with-services:latest",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "postCreateCommand": "pip install -e '.[dev]'",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-python.vscode-pylance"
+        ]
+      }
+    }
+  }
