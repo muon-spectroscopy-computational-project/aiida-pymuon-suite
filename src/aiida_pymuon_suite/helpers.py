@@ -12,7 +12,7 @@ import shutil
 import tempfile
 
 from aiida.common.exceptions import NotExistent
-from aiida.orm import Code, Computer
+from aiida.orm import Computer, InstalledCode
 
 LOCALHOST_NAME = "localhost-test"
 
@@ -47,7 +47,7 @@ def get_computer(name=LOCALHOST_NAME, workdir=None):
     """
 
     try:
-        computer = Computer.objects.get(label=name)
+        computer = Computer.collection.get(label=name)
     except NotExistent:
         if workdir is None:
             workdir = tempfile.mkdtemp()
@@ -84,16 +84,14 @@ def get_code(entry_point, computer):
             f"Entry point '{entry_point}' not recognized. Allowed values: {list(executables.keys())}"
         ) from exc
 
-    codes = Code.objects.find(  # pylint: disable=no-member
-        filters={"label": executable}
-    )
+    codes =  InstalledCode.collection.find(filters={"label": executable})
     if codes:
         return codes[0]
-
     path = get_path_to_executable(executable)
-    code = Code(
-        input_plugin_name=entry_point,
-        remote_computer_exec=[computer, path],
+    code = InstalledCode(
+        label=executable,
+        computer=computer,
+        filepath_executable=path,
+        default_calc_job_plugin=entry_point,
     )
-    code.label = executable
     return code.store()
