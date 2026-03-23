@@ -23,7 +23,7 @@ cmdline_options = {
 
 class UepParameters(Dict):  # pylint: disable=too-many-ancestors
     """
-    Command line options for diff.
+    Command line options for UEP optimisation parameters.
 
     This class represents a python dictionary used to
     pass command line options to the executable.
@@ -37,7 +37,7 @@ class UepParameters(Dict):  # pylint: disable=too-many-ancestors
         """
         Constructor for the data class
 
-        Usage: ``DiffParameters(dict{'ignore-case': True})``
+        Usage: ``UepParameters(dict{'poisson_r': 0.8})``
 
         :param parameters_dict: dictionary with commandline parameters
         :param type parameters_dict: dict
@@ -51,7 +51,7 @@ class UepParameters(Dict):  # pylint: disable=too-many-ancestors
 
         Uses the voluptuous package for validation. Find out about allowed keys using::
 
-            print(DiffParameters).schema.schema
+            print(UepParameters.schema.schema)
 
         :param parameters_dict: dictionary with commandline parameters
         :param type parameters_dict: dict
@@ -99,7 +99,7 @@ class UepParameters(Dict):  # pylint: disable=too-many-ancestors
         Append values of dictionary to usual representation. E.g.::
 
             uuid: b416cbee-24e8-47a8-8c11-6d668770158b (pk: 590)
-            {'ignore-case': True}
+            {'poisson_r': 0.8, 'vdw_scale': 0.5, 'geom_steps': 30, 'geom_force_tol': 0.05, 'uep_gw_factor': 5.0}
 
         """
         string = super().__str__()

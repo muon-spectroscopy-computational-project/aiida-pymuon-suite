@@ -74,7 +74,7 @@ class UepParser(Parser):
                 struct_dirs.add(parts[1])
         self.logger.info(f"Found {len(uep_files)} UEP optimisation output files (.uep) for {len(struct_dirs)} muonated structures.")
 
-        #handl opitional allpos file
+        # handle optional allpos file
 
         allpos_files = [f for f in self.retrieved.list_object_names() if f.startswith("allpos.")]
         if allpos_files:

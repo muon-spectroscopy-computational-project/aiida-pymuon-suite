@@ -14,10 +14,10 @@ UepParameters = DataFactory("pymuon.uep")
 
 class UepCalculation(CalcJob):
     """
-    AiiDA calculation plugin wrapping the pymuon-suite UEP ooptimisation pipeline.
+    AiiDA calculation plugin wrapping the pymuon-suite UEP optimisation pipeline.
 
-    Runs pm-muairss to generate muonated structres, and run pm-uem-opt on each generated structre.
-    Requires: CASTEP charge density file, long gile and crystal structure file.
+    Runs pm-muairss to generate muonated structures, and run pm-uep-opt on each generated structure.
+    Requires: CASTEP charge density file, log file and crystal structure file.
     """
 
     @classmethod
@@ -33,7 +33,6 @@ class UepCalculation(CalcJob):
         spec.inputs["metadata"]["options"]["parser_name"].default = "pymuon.uep"
 
         # new ports
-        spec.input("metadata.options.output_filename", valid_type=str, default="patch.diff")
         spec.input(
             "parameters",
             valid_type=UepParameters,
@@ -78,7 +77,7 @@ class UepCalculation(CalcJob):
             params_file.write(params_content)
 
 
-        # Set up the main commaind: pm-muairss -t -w <structure> params.yaml
+        # Set up the main command: pm-muairss -t -w <structure> params.yaml
         codeinfo = datastructures.CodeInfo()
         codeinfo.cmdline_params = ["-t", "w", internal_structure_name, "params.yaml"]
         codeinfo.code_uuid = self.inputs.code.uuid
@@ -107,7 +106,7 @@ class UepCalculation(CalcJob):
         ]
 
         calcinfo.append_text = self._get_append_text()
-        #post muairss step: run pm-uem-opt on each generated muonated structure
+        #post muairss step: run pm-uep-opt on each generated muonated structure
         calcinfo.retrieve_list = [
             "muon-airss-out",
             "params.yaml",

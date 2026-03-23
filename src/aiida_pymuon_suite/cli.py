@@ -26,12 +26,12 @@ def data_cli():
 @decorators.with_dbenv()
 def list_():  # pylint: disable=redefined-builtin
     """
-    Display all DiffParameters nodes
+    Display all UepParameters nodes
     """
-    diff_parameters = DataFactory("pymuon.uep")
+    uep_parameters = DataFactory("pymuon.uep")
 
     qb = QueryBuilder()
-    qb.append(diff_parameters)
+    qb.append(uep_parameters)
     results = qb.all()
 
     s = ""
