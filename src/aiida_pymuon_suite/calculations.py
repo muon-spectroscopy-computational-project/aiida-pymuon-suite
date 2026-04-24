@@ -6,7 +6,7 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import SinglefileData
+from aiida.orm import FolderData, SinglefileData
 from aiida.plugins import DataFactory
 
 UepParameters = DataFactory("pymuon.uep")
@@ -44,7 +44,13 @@ class UepCalculation(CalcJob):
         spec.output(
             "allpos_files",
             valid_type=SinglefileData,
+            required=False,
             help="file containing all the generated muonated structures. (allpos format)",
+        )
+        spec.output(
+            "muon_airss_out",
+            valid_type=FolderData,
+            help="Directory containing UEP optimisation results (.uep files).",
         )
 
         spec.exit_code(
@@ -69,7 +75,7 @@ class UepCalculation(CalcJob):
 
         # Determine the structure file name
         structure_ext = self.inputs.structure.filename.rsplit(".", 1)[-1]
-        internal_structure_name = f"structure.{structure_ext}"
+        internal_structure_name = f"input_structure.{structure_ext}"
 
         # Write params.yaml
         params_content = self.inputs.parameters.render_yaml()
@@ -135,6 +141,7 @@ OUT_FOLDER="muon-airss-out"
 
 find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i 's#^chden_path: .*#chden_path: ./#g' {} +
 find "$OUT_FOLDER" -type f -name "*.yaml" -exec sed -i 's#^chden_seed: .*#chden_seed: input_structure#g' {} +
+
 
 pids=()
 for yaml_file in "$OUT_FOLDER"/*/*/*.yaml; do

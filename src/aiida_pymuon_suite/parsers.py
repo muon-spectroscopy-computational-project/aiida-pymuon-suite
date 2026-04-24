@@ -6,7 +6,7 @@ Register parsers via the "aiida.parsers" entry point in setup.json.
 
 from aiida.common import exceptions
 from aiida.engine import ExitCode
-from aiida.orm import SinglefileData
+from aiida.orm import FolderData, SinglefileData
 from aiida.parsers.parser import Parser
 from aiida.plugins import CalculationFactory
 from aiida.repository import FileType
@@ -74,12 +74,19 @@ class UepParser(Parser):
                 struct_dirs.add(parts[1])
         self.logger.info(f"Found {len(uep_files)} UEP optimisation output files (.uep) for {len(struct_dirs)} muonated structures.")
 
-        # handle optional allpos file
+        # expose muon-airss-out as a named FolderData output
+        muon_airss_out = FolderData()
+        for filepath in all_files:
+            relative_path = filepath[len("muon-airss-out/"):]
+            with self.retrieved.open(filepath, "rb") as f:
+                muon_airss_out.put_object_from_filelike(f, relative_path)
+        self.out("muon_airss_out", muon_airss_out)
 
+        # handle optional allpos file
         allpos_files = [f for f in self.retrieved.list_object_names() if f.startswith("allpos.")]
         if allpos_files:
             with self.retrieved.open(allpos_files[0], "rb") as handle:
-                allpos_node = SinglefileData(file=handle)
+                allpos_node = SinglefileData(file=handle, filename=allpos_files[0])
             self.out("allpos_files", allpos_node)
-        
+
         return ExitCode(0)

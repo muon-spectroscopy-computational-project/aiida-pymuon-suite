@@ -24,7 +24,8 @@ dependencies = [
     "aiida-core>=2.5,<3",
     "voluptuous",
     "pymuonsuite",
-    "pyyaml"
+    "pyyaml",
+    "ase==3.22.1"
 ]
 
 [project.optional-dependencies]
