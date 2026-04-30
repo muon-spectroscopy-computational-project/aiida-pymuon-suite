@@ -24,6 +24,7 @@ dependencies = [
     "aiida-core>=2.5,<3",
     "voluptuous",
     "pymuonsuite",
+    "soprano>=0.11.1; python_version >= '3.10'",
     "pyyaml",
     "ase==3.22.1"
 ]
@@ -47,13 +48,18 @@ docs = [
 Source = "https://github.com/subindev-d/aiida-pymuon-suite"
 
 [project.entry-points."aiida.data"]
-"pymuon.uep" = "aiida_pymuon_suite.data:UepParameters"
+"pymuon.uep" = "aiida_pymuon_suite.data.parameters:UepParameters"
 
 [project.entry-points."aiida.calculations"]
-"pymuon.uep" = "aiida_pymuon_suite.calculations:UepCalculation"
+"pymuon.muairss" = "aiida_pymuon_suite.calculations.muairss:MuairssCalculation"
+"pymuon.uep_opt" = "aiida_pymuon_suite.calculations.uep_opt:UepOptCalculation"
 
 [project.entry-points."aiida.parsers"]
-"pymuon.uep" = "aiida_pymuon_suite.parsers:UepParser"
+"pymuon.muairss" = "aiida_pymuon_suite.parsers.muairss:MuairssParser"
+"pymuon.uep_opt" = "aiida_pymuon_suite.parsers.uep_opt:UepOptParser"
+
+[project.entry-points."aiida.workflows"]
+"pymuon.muairss_uep" = "aiida_pymuon_suite.workflows.muairss_uep:MuairssUepWorkChain"
 
 [project.entry-points."aiida.cmdline.data"]
 "pymuon.uep" = "aiida_pymuon_suite.cli:data_cli"

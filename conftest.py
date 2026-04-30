@@ -11,6 +11,20 @@ def clear_database_auto(aiida_profile_clean):  # pylint: disable=unused-argument
 
 
 @pytest.fixture(scope="function")
-def uep_code(aiida_computer_local, aiida_code_installed):
-    """Get a pymuon code."""
-    return aiida_code_installed(computer=aiida_computer_local(), filepath_executable="pm-muairss", default_calc_job_plugin="pymuon.uep")
+def muairss_code(aiida_computer_local, aiida_code_installed):
+    """InstalledCode for pm-muairss (MuairssCalculation)."""
+    return aiida_code_installed(
+        computer=aiida_computer_local(),
+        filepath_executable="pm-muairss",
+        default_calc_job_plugin="pymuon.muairss",
+    )
+
+
+@pytest.fixture(scope="function")
+def uep_opt_code(aiida_computer_local, aiida_code_installed):
+    """InstalledCode for pm-uep-opt (UepOptCalculation)."""
+    return aiida_code_installed(
+        computer=aiida_computer_local(),
+        filepath_executable="pm-uep-opt",
+        default_calc_job_plugin="pymuon.uep_opt",
+    )
