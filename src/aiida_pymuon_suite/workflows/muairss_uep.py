@@ -98,7 +98,7 @@ class MuairssUepWorkChain(WorkChain):
 
         futures = {}
         for yaml_path in yaml_paths:
-            with folder.base.repository.open(yaml_path, "rb") as f:
+            with folder.open(yaml_path, "rb") as f:
                 yaml_node = SinglefileData(file=f, filename=Path(yaml_path).name)
             yaml_node.store()
 

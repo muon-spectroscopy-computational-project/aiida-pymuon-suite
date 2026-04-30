@@ -4,10 +4,9 @@
 Usage:
     ./example_01.py --muairss-code pm-muairss@localhost --uep-code pm-uep-opt@localhost
 
-Alternative (creates codes on the fly from PATH):
+    # Omit codes to auto-create them from PATH:
     ./example_01.py
 
-Help:
     ./example_01.py --help
 """
 
@@ -21,10 +20,7 @@ from aiida.plugins import DataFactory, WorkflowFactory
 from aiida_pymuon_suite import helpers
 from aiida_pymuon_suite.workflows.muairss_uep import cluster_muon_sites
 
-import aiida_pymuon_suite as _pkg
-# verdi run sets __file__ to the bare filename, not the full path,
-# so we locate input_files relative to the installed package instead.
-INPUT_DIR = path.normpath(path.join(path.dirname(path.abspath(_pkg.__file__)), "..", "..", "examples", "input_files"))
+INPUT_DIR = path.join(path.dirname(path.abspath(__file__)), "input_files")
 
 
 def run_workflow(muairss_code, uep_code):
@@ -123,4 +119,4 @@ def cli(muairss_code, uep_code):
 
 
 if __name__ == "__main__":
-    cli()  # pylint: disable=no-value-for-parameter
+    cli()

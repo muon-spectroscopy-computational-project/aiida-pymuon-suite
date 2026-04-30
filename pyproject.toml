@@ -26,12 +26,19 @@ dependencies = [
     "pymuonsuite",
     "soprano>=0.11.1; python_version >= '3.10'",
     "pyyaml",
-    "ase==3.22.1"
+    "ase>=3.22.1"
 ]
 
 [project.optional-dependencies]
 testing = [
-  "pytest~=7.0"
+    "pytest~=7.0",
+    "pgtest~=1.3,>=1.3.1",
+    "coverage~=7.0",
+    "pytest-cov~=4.1",
+]
+dev = [
+    "ipdb",
+    "ipython",
 ]
 pre-commit = [
   'pre-commit~=3.5',
@@ -67,7 +74,6 @@ Source = "https://github.com/subindev-d/aiida-pymuon-suite"
 [tool.pytest.ini_options]
 # Configuration for [pytest](https://docs.pytest.org)
 python_files = "test_*.py example_*.py"
-addopts = "--pdbcls=IPython.terminal.debugger:TerminalPdb"
 filterwarnings = [
     "ignore::DeprecationWarning:aiida:",
     "ignore:Creating AiiDA configuration folder:",
