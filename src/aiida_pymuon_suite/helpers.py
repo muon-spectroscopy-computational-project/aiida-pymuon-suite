@@ -2,10 +2,9 @@
 Helper functions for setting up
 
  1. An AiiDA localhost computer
- 2. A "pm-muairss" code on localhost
+ 2. A "pm-muairss" or "pm-uep-opt" code on localhost
 
-Note: Point 2 is made possible by the fact that the ``pm-muairss`` from pymuon-suite is
-available in the PATH.
+Note: Both executables are provided by pymuon-suite and must be available in PATH.
 """
 
 import shutil
@@ -17,7 +16,8 @@ from aiida.orm import Computer, InstalledCode
 LOCALHOST_NAME = "localhost-test"
 
 executables = {
-    "pymuon.uep": "pm-muairss",
+    "pymuon.muairss": "pm-muairss",
+    "pymuon.uep_opt": "pm-uep-opt",
 }
 
 
@@ -84,7 +84,7 @@ def get_code(entry_point, computer):
             f"Entry point '{entry_point}' not recognized. Allowed values: {list(executables.keys())}"
         ) from exc
 
-    codes =  InstalledCode.collection.find(filters={"label": executable})
+    codes = InstalledCode.collection.find(filters={"label": executable})
     if codes:
         return codes[0]
     path = get_path_to_executable(executable)
