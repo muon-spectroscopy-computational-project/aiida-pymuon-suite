@@ -1,7 +1,14 @@
 #!/usr/bin/env python
-"""Run a test calculation on localhost.
+"""Run the full muon stopping sites workflow on localhost.
 
-Usage: ./example_01.py
+Usage:
+    ./example_01.py --muairss-code pm-muairss@localhost --uep-code pm-uep-opt@localhost
+
+Alternative (creates codes on the fly from PATH):
+    ./example_01.py
+
+Help:
+    ./example_01.py --help
 """
 
 from os import path
@@ -9,72 +16,110 @@ from os import path
 import click
 from aiida import cmdline, engine
 from aiida.orm import SinglefileData
-from aiida.plugins import CalculationFactory, DataFactory
+from aiida.plugins import DataFactory, WorkflowFactory
+
 from aiida_pymuon_suite import helpers
+from aiida_pymuon_suite.workflows.muairss_uep import cluster_muon_sites
 
-INPUT_DIR = path.join(path.dirname(path.realpath(__file__)), "input_files")
+import aiida_pymuon_suite as _pkg
+# verdi run sets __file__ to the bare filename, not the full path,
+# so we locate input_files relative to the installed package instead.
+INPUT_DIR = path.normpath(path.join(path.dirname(path.abspath(_pkg.__file__)), "..", "..", "examples", "input_files"))
 
 
-def test_run(pymuon_code):
-    """Run a calculation on the localhost computer.
-
-    Uses test helpers to create AiiDA Code on the fly.
-    """
-    if not pymuon_code:
-        # get code
+def run_workflow(muairss_code, uep_code):
+    """Run MuairssUepWorkChain + cluster_muon_sites on the Si test case."""
+    if not muairss_code:
         computer = helpers.get_computer()
-        pymuon_code = helpers.get_code(
-            entry_point="pymuon.uep", computer=computer
-        )
+        muairss_code = helpers.get_code(entry_point="pymuon.muairss", computer=computer)
+    if not uep_code:
+        computer = helpers.get_computer()
+        uep_code = helpers.get_code(entry_point="pymuon.uep_opt", computer=computer)
 
-    # Prepare input parameters
-    uep_parameters = DataFactory("pymuon.uep")
-    parameters = uep_parameters({
+    UepParameters = DataFactory("pymuon.uep")
+    parameters = UepParameters({
         "poisson_r": 0.8,
         "vdw_scale": 0.5,
         "geom_steps": 30,
         "geom_force_tol": 0.05,
         "uep_gw_factor": 5.0,
-        "allpos_ext": "xyz",
+        "clustering_method": "hier",
+        "clustering_hier_t": 0.3,
     })
 
-    structure = SinglefileData(file=path.join(INPUT_DIR, "Si.cell"))
+    structure      = SinglefileData(file=path.join(INPUT_DIR, "Si.cell"))
     charge_density = SinglefileData(file=path.join(INPUT_DIR, "Si.den_fmt"))
-    castep_log = SinglefileData(file=path.join(INPUT_DIR, "Si.castep"))
+    castep_log     = SinglefileData(file=path.join(INPUT_DIR, "Si.castep"))
 
-    # set up calculation
-    inputs = {
-        "code": pymuon_code,
-        "parameters": parameters,
-        "structure": structure,
-        "charge_density": charge_density,
-        "castep_log": castep_log,
-        "metadata": {
-            "description": "Test job submission with the aiida-pymuon-suite plugin",
-        },
-    }
+    # --- Step 1: run the WorkChain (muairss → fan-out UEP opt → collect) ---
+    print("Running MuairssUepWorkChain ...")
+    result, node = engine.run_get_node(
+        WorkflowFactory("pymuon.muairss_uep"),
+        muairss_code=muairss_code,
+        uep_code=uep_code,
+        structure=structure,
+        charge_density=charge_density,
+        castep_log=castep_log,
+        parameters=parameters,
+    )
 
-    # Note: in order to submit your calculation to the aiida daemon, do:
-    # from aiida.engine import submit
-    result = engine.run(CalculationFactory("pymuon.uep"), **inputs)
+    if not node.is_finished_ok:
+        print(f"WorkChain FAILED — exit status {node.exit_status}: {node.exit_message}")
+        return
 
-    uep_result = result["allpos_files"].get_content()
-    print(f"Uep result : \n{uep_result}")
+    muon_sites = result["muon_sites"]
+    print(f"WorkChain finished OK (pk={node.pk})")
+
+    from aiida.repository import FileType
+    def list_files(folder, path=None):
+        out = []
+        for obj in folder.list_objects(path):
+            p = f"{path}/{obj.name}" if path else obj.name
+            if obj.file_type == FileType.DIRECTORY:
+                out.extend(list_files(folder, p))
+            else:
+                out.append(p)
+        return out
+
+    uep_files = [f for f in list_files(muon_sites) if f.endswith(".uep")]
+    print(f"  {len(uep_files)} candidate .uep files produced")
+
+    # --- Step 2: cluster the muon sites ---
+    print("\nClustering muon sites ...")
+    cluster_result = engine.run(
+        cluster_muon_sites,
+        structure=structure,
+        muon_sites=muon_sites,
+        parameters=parameters,
+    )
+
+    print("\n--- Cluster report ---")
+    print(cluster_result["cluster_report"].get_content())
+
+    print("--- Cluster summary ---")
+    for calc, clusters in cluster_result["cluster_data"].get_dict().items():
+        print(f"Calculator: {calc}")
+        for cid, info in sorted(clusters.items(), key=lambda x: x[1]["E_min"]):
+            print(f"  Cluster {cid}: {info['n']} structures, E_min = {info['E_min']:.4f} eV")
 
 
 @click.command()
 @cmdline.utils.decorators.with_dbenv()
-@cmdline.params.options.CODE()
-def cli(code):
-    """Run example.
-
-    Example usage: $ ./example_01.py --code pm-muairss@localhost
-
-    Alternative (creates pm-muairss@localhost-test code): $ ./example_01.py
-
-    Help: $ ./example_01.py --help
-    """
-    test_run(code)
+@click.option(
+    "--muairss-code",
+    default=None,
+    type=cmdline.params.types.CodeParamType(),
+    help="pm-muairss code (e.g. pm-muairss@localhost). Created from PATH if omitted.",
+)
+@click.option(
+    "--uep-code",
+    default=None,
+    type=cmdline.params.types.CodeParamType(),
+    help="pm-uep-opt code (e.g. pm-uep-opt@localhost). Created from PATH if omitted.",
+)
+def cli(muairss_code, uep_code):
+    """Run the muon stopping sites workflow on the Si test case."""
+    run_workflow(muairss_code, uep_code)
 
 
 if __name__ == "__main__":
