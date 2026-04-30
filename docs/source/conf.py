@@ -14,7 +14,7 @@ import os
 import sys
 import time
 
-import aiida-pymuon-suite
+import aiida_pymuon_suite
 from aiida import load_profile
 from aiida.storage.sqlite_temp import SqliteTempBackend
 
@@ -77,7 +77,7 @@ copyright = f"{copyright_year_string}, {copyright_owners}. All rights reserved"
 # built documents.
 #
 # The full version, including alpha/beta/rc tags.
-release = aiida-pymuon-suite.__version__
+release = aiida_pymuon_suite.__version__
 # The short X.Y version.
 version = ".".join(release.split(".")[:2])
 
@@ -196,7 +196,7 @@ def run_apidoc(_):
     """
     source_dir = os.path.abspath(os.path.dirname(__file__))
     apidoc_dir = os.path.join(source_dir, "apidoc")
-    package_dir = os.path.join(source_dir, os.pardir, os.pardir, "src", "aiida-pymuon-suite")
+    package_dir = os.path.join(source_dir, os.pardir, os.pardir, "src", "aiida_pymuon_suite")
 
     # In #1139, they suggest the route below, but this ended up
     # calling sphinx-build, not sphinx-apidoc

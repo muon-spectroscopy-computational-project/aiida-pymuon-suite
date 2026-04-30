@@ -39,7 +39,7 @@ class UepOptCalculation(CalcJob):
             help="Directory containing .uep and .uep.pkl for this candidate.",
         )
 
-        spec.exit_code(300, "ERROR_NO_UEP_FILE", message="pm-uep-opt did not produce a .uep output file.")
+        spec.exit_code(301, "ERROR_NO_UEP_FILE", message="pm-uep-opt did not produce a .uep output file.")
 
     def prepare_for_submission(self, folder):
         # Patch chden_path/chden_seed to point at the AiiDA working directory

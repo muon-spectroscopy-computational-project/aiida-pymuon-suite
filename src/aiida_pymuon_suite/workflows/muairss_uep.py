@@ -1,12 +1,11 @@
 """MuairssUepWorkChain and cluster_muon_sites calcfunction."""
 
 import io
-import os
 import tempfile
 from pathlib import Path
 
 from aiida.engine import ToContext, WorkChain, calcfunction
-from aiida.orm import AbstractCode, Dict, FolderData, SinglefileData
+from aiida.orm import AbstractCode, Data, Dict, FolderData, SinglefileData
 from aiida.plugins import CalculationFactory, DataFactory
 from aiida.repository import FileType
 
@@ -141,7 +140,7 @@ class MuairssUepWorkChain(WorkChain):
 
 
 @calcfunction
-def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parameters: UepParameters) -> dict:
+def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parameters: UepParameters) -> dict[str, Data]:
     """Cluster UEP candidate sites using pymuonsuite directly (no scheduler job).
 
     Returns cluster_report (SinglefileData) and cluster_data (Dict).
@@ -200,15 +199,12 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
             warnings.simplefilter("ignore")
             clusters = muairss_cluster(struct, collection, params)
 
-        # write_cluster_report uses os.getcwd() implicitly via open(name + "_clusters.txt")
-        orig_dir = os.getcwd()
-        os.chdir(str(tmpdir))
-        try:
-            args = SimpleNamespace(structures=structure.filename, parameter_file="params.yaml")
-            # write_cluster_report expects {structure_name: {calc: result}}
-            write_cluster_report(args, params, {params["name"]: clusters})
-        finally:
-            os.chdir(orig_dir)
+        # write_cluster_report opens params["name"] + "_clusters.txt" as a relative path.
+        report_stem = str(tmpdir / params["name"])
+        params_write = {**params, "name": report_stem}
+        args = SimpleNamespace(structures=structure.filename, parameter_file="params.yaml")
+        # write_cluster_report expects {structure_name: {calc: result}}
+        write_cluster_report(args, params_write, {params["name"]: clusters})
 
         report_path = tmpdir / f"{params['name']}_clusters.txt"
         cluster_report = SinglefileData(file=str(report_path))
