@@ -136,7 +136,7 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
     yaml_files = [f for f in all_files if f.endswith(".yaml")]
     assert yaml_files
 
-    with folder.base.repository.open(yaml_files[0], "rb") as f:
+    with folder.open(yaml_files[0], "rb") as f:
         yaml_node = SinglefileData(file=f, filename="candidate.yaml")
     yaml_node.store()
 
