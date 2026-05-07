@@ -14,7 +14,7 @@ from os import path
 
 import click
 from aiida import cmdline, engine
-from aiida.orm import SinglefileData
+from aiida.orm import Int, SinglefileData
 from aiida.plugins import DataFactory, WorkflowFactory
 
 from aiida_pymuon_suite import helpers
@@ -23,7 +23,7 @@ from aiida_pymuon_suite.workflows.muairss_uep import cluster_muon_sites
 INPUT_DIR = path.join(path.dirname(path.abspath(__file__)), "input_files")
 
 
-def run_workflow(muairss_code, uep_code):
+def run_workflow(muairss_code, uep_code, max_concurrent):
     """Run MuairssUepWorkChain + cluster_muon_sites on the Si test case."""
     if not muairss_code:
         computer = helpers.get_computer()
@@ -57,6 +57,7 @@ def run_workflow(muairss_code, uep_code):
         charge_density=charge_density,
         castep_log=castep_log,
         parameters=parameters,
+        max_concurrent=Int(max_concurrent),
     )
 
     if not node.is_finished_ok:
@@ -113,9 +114,16 @@ def run_workflow(muairss_code, uep_code):
     type=cmdline.params.types.CodeParamType(),
     help="pm-uep-opt code (e.g. pm-uep-opt@localhost). Created from PATH if omitted.",
 )
-def cli(muairss_code, uep_code):
+@click.option(
+    "--max-concurrent",
+    default=4,
+    type=int,
+    show_default=True,
+    help="Maximum number of UepOptCalculations to run concurrently.",
+)
+def cli(muairss_code, uep_code, max_concurrent):
     """Run the muon stopping sites workflow on the Si test case."""
-    run_workflow(muairss_code, uep_code)
+    run_workflow(muairss_code, uep_code, max_concurrent)
 
 
 if __name__ == "__main__":

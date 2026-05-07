@@ -4,8 +4,8 @@ import io
 import tempfile
 from pathlib import Path
 
-from aiida.engine import ToContext, WorkChain, calcfunction
-from aiida.orm import AbstractCode, Data, Dict, FolderData, SinglefileData
+from aiida.engine import ToContext, WorkChain, calcfunction, while_
+from aiida.orm import AbstractCode, Data, Dict, FolderData, Int, SinglefileData, load_node
 from aiida.plugins import CalculationFactory, DataFactory
 from aiida.repository import FileType
 
@@ -49,7 +49,7 @@ def _restore_folder_data(folder_data, dest_path):
 
 
 class MuairssUepWorkChain(WorkChain):
-    """WorkChain: MuairssCalculation → fan-out UepOptCalculation per candidate → collect results."""
+    """WorkChain: MuairssCalculation → batched UepOptCalculation per candidate → collect results."""
 
     @classmethod
     def define(cls, spec):
@@ -61,11 +61,21 @@ class MuairssUepWorkChain(WorkChain):
         spec.input("charge_density", valid_type=SinglefileData, help="CASTEP charge density (.den_fmt).")
         spec.input("castep_log", valid_type=SinglefileData, help="CASTEP log file (.castep).")
         spec.input("parameters", valid_type=UepParameters, help="UEP parameters.")
+        spec.input(
+            "max_concurrent",
+            valid_type=Int,
+            default=lambda: Int(4),
+            validator=lambda value, _: "max_concurrent must be >= 1" if value.value < 1 else None,
+            help="Maximum number of UepOptCalculations to run concurrently.",
+        )
 
         spec.outline(
             cls.run_muairss,
             cls.inspect_muairss,
-            cls.inspect_uep_opt,
+            while_(cls.has_pending_candidates)(
+                cls.submit_uep_batch,
+                cls.inspect_uep_batch,
+            ),
             cls.collect_results,
         )
 
@@ -93,50 +103,87 @@ class MuairssUepWorkChain(WorkChain):
 
         folder = calc.outputs.candidates_folder
         yaml_paths = [p for p in _list_files_recursive(folder) if p.endswith(".yaml")]
-        self.report(f"Found {len(yaml_paths)} candidate YAMLs — fanning out UepOptCalculations.")
+        self.report(
+            f"Found {len(yaml_paths)} candidate YAMLs — "
+            f"processing in batches of {self.inputs.max_concurrent.value}."
+        )
 
-        futures = {}
+        # Store all yaml nodes upfront as (key, pk) pairs so the pending list is safely checkpointed.
+        pending = []
         for yaml_path in yaml_paths:
             with folder.open(yaml_path, "rb") as f:
                 yaml_node = SinglefileData(file=f, filename=Path(yaml_path).name)
             yaml_node.store()
+            key = "uep_" + Path(yaml_path).parent.name
+            pending.append((key, yaml_node.pk))
 
-            key = f"uep_{Path(yaml_path).stem}"
+        self.ctx.pending_candidates = pending
+        self.ctx.all_uep_keys = []
+        self.ctx.failed_keys = []
+        self.ctx.batch_keys = []
+
+    def has_pending_candidates(self):
+        return bool(self.ctx.pending_candidates)
+
+    def submit_uep_batch(self):
+        max_concurrent = self.inputs.max_concurrent.value
+        batch = self.ctx.pending_candidates[:max_concurrent]
+        self.ctx.pending_candidates = self.ctx.pending_candidates[max_concurrent:]
+
+        futures = {}
+        for key, yaml_pk in batch:
             future = self.submit(
                 UepOptCalculation,
                 code=self.inputs.uep_code,
-                candidate_yaml=yaml_node,
+                candidate_yaml=load_node(yaml_pk),
                 charge_density=self.inputs.charge_density,
                 castep_log=self.inputs.castep_log,
                 parameters=self.inputs.parameters,
             )
             futures[key] = future
 
-        self.ctx.uep_keys = list(futures.keys())
+        self.ctx.batch_keys = list(futures.keys())
+        self.ctx.all_uep_keys = self.ctx.all_uep_keys + self.ctx.batch_keys
+        self.report(
+            f"Submitted batch of {len(futures)} UepOptCalculations "
+            f"({len(self.ctx.pending_candidates)} remaining)."
+        )
         return ToContext(**futures)
 
-    def inspect_uep_opt(self):
-        keys = self.ctx.uep_keys
-        failed = [k for k in keys if not self.ctx[k].is_finished_ok]
-        self.report(f"{len(keys) - len(failed)}/{len(keys)} UepOptCalculations succeeded.")
+    def inspect_uep_batch(self):
+        failed = [k for k in self.ctx.batch_keys if not self.ctx[k].is_finished_ok]
+        self.ctx.failed_keys = self.ctx.failed_keys + failed
+        succeeded = len(self.ctx.batch_keys) - len(failed)
+        self.report(f"Batch complete: {succeeded}/{len(self.ctx.batch_keys)} succeeded.")
+
+        total_so_far = len(self.ctx.all_uep_keys)
+        total_failed = len(self.ctx.failed_keys)
+        if total_so_far and total_failed / total_so_far > 0.10:
+            self.report(
+                f"Failure rate {total_failed}/{total_so_far} exceeds 10% — "
+                f"aborting {len(self.ctx.pending_candidates)} remaining candidates."
+            )
+            self.ctx.pending_candidates = []
+
+    def collect_results(self):
+        keys = self.ctx.all_uep_keys
+        failed = set(self.ctx.failed_keys)
 
         if len(failed) == len(keys):
             return self.exit_codes.ERROR_ALL_UEP_FAILED
         if len(failed) / len(keys) > 0.10:
             return self.exit_codes.ERROR_PARTIAL_UEP_FAIL
 
-    def collect_results(self):
         kwargs = {}
-        for key in self.ctx.uep_keys:
-            calc = self.ctx[key]
-            if not calc.is_finished_ok:
+        for key in keys:
+            if key in failed:
                 continue
             candidate_name = key[len("uep_"):]
-            kwargs[candidate_name] = calc.outputs.uep_result
+            kwargs[candidate_name] = self.ctx[key].outputs.uep_result
 
         muon_sites = merge_uep_results(**kwargs)
         self.out("muon_sites", muon_sites)
-        self.report("Collected muon_sites FolderData.")
+        self.report(f"Collected muon_sites FolderData from {len(kwargs)} candidates.")
 
 
 @calcfunction
