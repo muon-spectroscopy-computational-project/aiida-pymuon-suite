@@ -33,6 +33,12 @@ class MuairssCalculation(CalcJob):
             valid_type=FolderData,
             help="muon-airss-out/uep/ tree — one subdirectory per candidate, each with a .yaml.",
         )
+        spec.output(
+            "allpos_file",
+            valid_type=SinglefileData,
+            required=False,
+            help="allpos structure file (e.g. allpos.xyz) — only present when allpos_ext is set.",
+        )
 
         spec.exit_code(300, "ERROR_NO_CANDIDATES", message="pm-muairss generated no candidate structures.")
 
@@ -54,6 +60,10 @@ class MuairssCalculation(CalcJob):
         calcinfo.local_copy_list = [
             (self.inputs.structure.uuid, self.inputs.structure.filename, internal_name),
         ]
-        calcinfo.retrieve_list = ["muon-airss-out", "pm-muairss.stdout", "pm-muairss.stderr"]
+        retrieve_list = ["muon-airss-out", "pm-muairss.stdout", "pm-muairss.stderr"]
+        params_dict = self.inputs.parameters.get_dict()
+        if "allpos_ext" in params_dict:
+            retrieve_list.append(f"allpos.{params_dict['allpos_ext']}")
+        calcinfo.retrieve_list = retrieve_list
 
         return calcinfo
