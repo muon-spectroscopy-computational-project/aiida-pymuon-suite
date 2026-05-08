@@ -80,6 +80,12 @@ class MuairssUepWorkChain(WorkChain):
         )
 
         spec.output("muon_sites", valid_type=FolderData, help="All .uep results merged into one FolderData.")
+        spec.output(
+            "allpos_file",
+            valid_type=SinglefileData,
+            required=False,
+            help="allpos structure file from MuairssCalculation — only present when allpos_ext is set.",
+        )
 
         spec.exit_code(400, "ERROR_MUAIRSS_FAILED", message="MuairssCalculation failed.")
         spec.exit_code(401, "ERROR_ALL_UEP_FAILED", message="All UepOptCalculations failed.")
@@ -184,6 +190,9 @@ class MuairssUepWorkChain(WorkChain):
         muon_sites = merge_uep_results(**kwargs)
         self.out("muon_sites", muon_sites)
         self.report(f"Collected muon_sites FolderData from {len(kwargs)} candidates.")
+
+        if "allpos_file" in self.ctx.muairss_calc.outputs:
+            self.out("allpos_file", self.ctx.muairss_calc.outputs.allpos_file)
 
 
 @calcfunction

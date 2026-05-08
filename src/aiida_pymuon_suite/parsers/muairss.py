@@ -1,8 +1,10 @@
 """Parser for MuairssCalculation."""
 
+from pathlib import Path
+
 from aiida.common import exceptions
 from aiida.engine import ExitCode
-from aiida.orm import FolderData
+from aiida.orm import FolderData, SinglefileData
 from aiida.parsers.parser import Parser
 from aiida.plugins import CalculationFactory
 from aiida.repository import FileType
@@ -55,4 +57,13 @@ class MuairssParser(Parser):
                 candidates_folder.put_object_from_filelike(f, relative)
 
         self.out("candidates_folder", candidates_folder)
+
+        # Expose allpos file if pm-muairss generated one (written to job cwd, not muon-airss-out)
+        allpos_matches = [n for n in files_retrieved if Path(n).stem == "allpos"]
+        if allpos_matches:
+            allpos_name = allpos_matches[0]
+            with self.retrieved.open(allpos_name, "rb") as f:
+                allpos_node = SinglefileData(file=f, filename=allpos_name)
+            self.out("allpos_file", allpos_node)
+
         return ExitCode(0)
