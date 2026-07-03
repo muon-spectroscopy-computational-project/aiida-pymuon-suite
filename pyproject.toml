@@ -30,6 +30,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+castep = [
+    "aiida-castep>=2.0",
+]
 testing = [
     "pytest~=7.0",
     "pgtest~=1.3,>=1.3.1",
@@ -67,6 +70,7 @@ Source = "https://github.com/subindev-d/aiida-pymuon-suite"
 
 [project.entry-points."aiida.workflows"]
 "pymuon.muairss_uep" = "aiida_pymuon_suite.workflows.muairss_uep:MuairssUepWorkChain"
+"pymuon.castep_muairss_uep" = "aiida_pymuon_suite.workflows.castep_muairss_uep:CastepMuairssUepWorkChain"
 
 [project.entry-points."aiida.cmdline.data"]
 "pymuon.uep" = "aiida_pymuon_suite.cli:data_cli"

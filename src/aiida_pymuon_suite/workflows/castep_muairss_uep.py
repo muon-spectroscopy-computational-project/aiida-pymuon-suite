@@ -1,25 +1,42 @@
-"""Bridge calcfunctions linking aiida-castep outputs to MuairssUepWorkChain inputs.
+"""CastepMuairssUepWorkChain and the bridge calcfunctions to aiida-castep.
 
 A CASTEP run on the pristine host (with ``write_formatted_density: true`` and
 ``*.den_fmt`` in the retrieve list) produces everything MuairssUepWorkChain
-needs. The calcfunctions here convert those outputs into the SinglefileData
-nodes the workchain expects, keeping the conversion on the provenance graph.
+needs. This module provides the calcfunctions converting those outputs into
+the SinglefileData nodes the workchain expects, and an outer workchain that
+either runs CASTEP itself (route A) or takes the files directly (route B).
+
+aiida-castep is an optional dependency (``pip install -e '.[castep]'``);
+without it only route B is available.
 """
 
 import io
 from pathlib import Path
 
 import numpy as np
-from aiida.engine import calcfunction
-from aiida.orm import SinglefileData
+from aiida.common import AttributeDict, exceptions
+from aiida.engine import ToContext, WorkChain, calcfunction, if_
+from aiida.orm import CalcJobNode, Dict, SinglefileData, StructureData
+from aiida.plugins import WorkflowFactory
 from ase import Atoms
 from ase import io as ase_io
 
-from aiida_pymuon_suite.workflows.muairss_uep import _list_files_recursive
+from aiida_pymuon_suite.workflows.muairss_uep import MuairssUepWorkChain, _list_files_recursive
+
+try:
+    CastepBaseWorkChain = WorkflowFactory("castep.base")
+except exceptions.MissingEntryPointError:
+    CastepBaseWorkChain = None
 
 CELL_FILENAME = "aiida.cell"
 DENSITY_SUFFIX = ".den_fmt"
 CASTEP_LOG_SUFFIX = ".castep"
+DENSITY_RETRIEVE_GLOB = "*.den_fmt"
+
+
+def has_aiida_castep():
+    """Return True if aiida-castep is installed (route A available)."""
+    return CastepBaseWorkChain is not None
 
 
 def _extract_single_file(folder_data, suffix):
@@ -71,3 +88,185 @@ def structure_to_cell(structure):
     buffer = io.StringIO()
     ase_io.write(buffer, atoms, format="castep-cell")
     return SinglefileData(file=io.BytesIO(buffer.getvalue().encode("utf-8")), filename=CELL_FILENAME)
+
+
+def _with_formatted_density(parameters):
+    """Return parameters with write_formatted_density enabled (new Dict if patched).
+
+    Handles both shapes CastepBaseWorkChain accepts: PARAM/CELL-nested and flat
+    (its CastepHelper sorts flat keys into the right file).
+    """
+    tree = parameters.get_dict()
+    target = tree["PARAM"] if "PARAM" in tree else tree
+    if str(target.get("write_formatted_density", "")).lower() in ("true", "t"):
+        return parameters
+    target["write_formatted_density"] = True
+    return Dict(tree)
+
+
+def _with_density_retrieved(settings):
+    """Return settings with *.den_fmt in ADDITIONAL_RETRIEVE_LIST (new Dict if patched)."""
+    tree = settings.get_dict() if settings is not None else {}
+    retrieve_list = tree.setdefault("ADDITIONAL_RETRIEVE_LIST", [])
+    if DENSITY_RETRIEVE_GLOB in retrieve_list:
+        return settings
+    retrieve_list.append(DENSITY_RETRIEVE_GLOB)
+    return Dict(tree)
+
+
+def _castep_retrieved_folder(workchain):
+    """Return the retrieved FolderData of the last successful CASTEP calculation.
+
+    CastepBaseWorkChain does not expose ``retrieved``, so it is taken from the
+    most recent finished-ok CalcJobNode the workchain called.
+    """
+    calcjobs = sorted(
+        (node for node in workchain.called if isinstance(node, CalcJobNode)),
+        key=lambda node: node.ctime,
+    )
+    for calcjob in reversed(calcjobs):
+        if calcjob.is_finished_ok and "retrieved" in calcjob.outputs:
+            return calcjob.outputs.retrieved
+    return None
+
+
+def validate_workchain_inputs(inputs, _):
+    """Ensure exactly one charge-density route is provided (route A xor route B)."""
+    has_castep = bool(inputs.get("castep"))
+    n_files = sum(1 for key in ("charge_density", "castep_log") if key in inputs)
+    if has_castep and n_files:
+        return (
+            "provide either the 'castep' namespace (run CASTEP, route A) or "
+            "'charge_density' + 'castep_log' files (route B), not both"
+        )
+    if has_castep or n_files == 2:
+        return None
+    if n_files == 1:
+        return "both 'charge_density' and 'castep_log' are required when providing the files manually"
+    message = "no charge-density source: provide 'charge_density' + 'castep_log' (route B)"
+    if has_aiida_castep():
+        return message + " or the 'castep' namespace (route A)"
+    return message + "; route A requires aiida-castep (pip install -e '.[castep]')"
+
+
+class CastepMuairssUepWorkChain(WorkChain):
+    """UEP muon stopping-site pipeline starting from a StructureData.
+
+    Wraps MuairssUepWorkChain with two ways of providing the CASTEP charge
+    density: route A runs a CastepBaseWorkChain on the pristine host (inputs
+    under the ``castep`` namespace; ``write_formatted_density`` and the
+    ``*.den_fmt`` retrieve entry are added automatically), route B takes
+    ``charge_density`` and ``castep_log`` files directly, as MuairssUepWorkChain
+    does today.
+    """
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+
+        spec.input("structure", valid_type=StructureData, help="Pristine host crystal structure.")
+        spec.input(
+            "charge_density",
+            valid_type=SinglefileData,
+            required=False,
+            help="CASTEP charge density (.den_fmt) — route B.",
+        )
+        spec.input(
+            "castep_log",
+            valid_type=SinglefileData,
+            required=False,
+            help="CASTEP log file (.castep) — route B.",
+        )
+        if has_aiida_castep():
+            spec.expose_inputs(
+                CastepBaseWorkChain,
+                namespace="castep",
+                exclude=("calc.structure",),
+                namespace_options={
+                    "required": False,
+                    "populate_defaults": False,
+                    "help": "Inputs for the CastepBaseWorkChain on the pristine host — route A.",
+                },
+            )
+        spec.expose_inputs(MuairssUepWorkChain, exclude=("structure", "charge_density", "castep_log"))
+        spec.inputs.validator = validate_workchain_inputs
+
+        spec.expose_outputs(MuairssUepWorkChain)
+
+        spec.outline(
+            if_(cls.should_run_castep)(
+                cls.run_castep,
+                cls.inspect_castep,
+            ),
+            cls.prepare_uep_inputs,
+            cls.run_muairss_uep,
+            cls.inspect_muairss_uep,
+        )
+
+        spec.exit_code(410, "ERROR_CASTEP_FAILED", message="The CastepBaseWorkChain did not finish successfully.")
+        spec.exit_code(
+            411,
+            "ERROR_UEP_INPUT_EXTRACTION",
+            message="Could not extract the .den_fmt/.castep files from the CASTEP outputs.",
+        )
+        spec.exit_code(412, "ERROR_MUAIRSS_UEP_FAILED", message="The MuairssUepWorkChain sub-process failed.")
+
+    def should_run_castep(self):
+        """Route A was chosen if the castep namespace is populated."""
+        return bool(self.inputs.get("castep"))
+
+    def run_castep(self):
+        """Submit the CastepBaseWorkChain on the pristine host structure."""
+        inputs = AttributeDict(self.exposed_inputs(CastepBaseWorkChain, namespace="castep"))
+        inputs.calc = AttributeDict(inputs.calc)
+        inputs.calc.structure = self.inputs.structure
+        inputs.calc.parameters = _with_formatted_density(inputs.calc.parameters)
+        inputs.calc.settings = _with_density_retrieved(inputs.calc.get("settings"))
+        running = self.submit(CastepBaseWorkChain, **inputs)
+        self.report(f"submitted CastepBaseWorkChain<{running.pk}> for the host charge density (route A)")
+        return ToContext(castep=running)
+
+    def inspect_castep(self):
+        """Check the CASTEP run and extract the UEP input files from it."""
+        workchain = self.ctx.castep
+        if not workchain.is_finished_ok:
+            self.report(f"CastepBaseWorkChain<{workchain.pk}> failed with exit status {workchain.exit_status}")
+            return self.exit_codes.ERROR_CASTEP_FAILED
+        retrieved = _castep_retrieved_folder(workchain)
+        if retrieved is None:
+            self.report(f"no retrieved folder found under CastepBaseWorkChain<{workchain.pk}>")
+            return self.exit_codes.ERROR_UEP_INPUT_EXTRACTION
+        try:
+            extracted = extract_uep_inputs(retrieved)
+        except ValueError as exc:
+            self.report(f"extraction of UEP inputs failed: {exc}")
+            return self.exit_codes.ERROR_UEP_INPUT_EXTRACTION
+        self.ctx.charge_density = extracted["charge_density"]
+        self.ctx.castep_log = extracted["castep_log"]
+        return None
+
+    def prepare_uep_inputs(self):
+        """Collect the UEP input files (route B) and render the structure to .cell."""
+        if "charge_density" in self.inputs:
+            self.ctx.charge_density = self.inputs.charge_density
+            self.ctx.castep_log = self.inputs.castep_log
+        self.ctx.cell_file = structure_to_cell(self.inputs.structure)
+
+    def run_muairss_uep(self):
+        """Submit the inner MuairssUepWorkChain with the collected files."""
+        inputs = AttributeDict(self.exposed_inputs(MuairssUepWorkChain))
+        inputs.structure = self.ctx.cell_file
+        inputs.charge_density = self.ctx.charge_density
+        inputs.castep_log = self.ctx.castep_log
+        running = self.submit(MuairssUepWorkChain, **inputs)
+        self.report(f"submitted MuairssUepWorkChain<{running.pk}>")
+        return ToContext(muairss_uep=running)
+
+    def inspect_muairss_uep(self):
+        """Check the inner workchain and forward its outputs."""
+        workchain = self.ctx.muairss_uep
+        if not workchain.is_finished_ok:
+            self.report(f"MuairssUepWorkChain<{workchain.pk}> failed with exit status {workchain.exit_status}")
+            return self.exit_codes.ERROR_MUAIRSS_UEP_FAILED
+        self.out_many(self.exposed_outputs(workchain, MuairssUepWorkChain))
+        return None
