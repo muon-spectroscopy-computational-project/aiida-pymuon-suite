@@ -10,7 +10,7 @@ aiida-castep is an optional dependency (``pip install -e '.[castep]'``);
 without it only route B is available.
 """
 
-import io
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -85,9 +85,11 @@ def structure_to_cell(structure):
         atoms.arrays["masses"], Atoms(atoms.get_chemical_symbols()).get_masses(), atol=1e-3
     ):
         del atoms.arrays["masses"]
-    buffer = io.StringIO()
-    ase_io.write(buffer, atoms, format="castep-cell")
-    return SinglefileData(file=io.BytesIO(buffer.getvalue().encode("utf-8")), filename=CELL_FILENAME)
+    # Write via a real file: ase<=3.22 castep-cell writer needs fd.name, which StringIO lacks
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cell_path = Path(tmpdir) / CELL_FILENAME
+        ase_io.write(str(cell_path), atoms, format="castep-cell")
+        return SinglefileData(file=str(cell_path))
 
 
 def _with_formatted_density(parameters):
