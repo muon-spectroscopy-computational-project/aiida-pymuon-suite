@@ -1,10 +1,10 @@
-"""Tests for CastepMuairssUepWorkChain (validator, input patching, route B end-to-end)."""
+"""Tests for CastepMuairssUepWorkChain (validator, input patching, routes B and C end-to-end)."""
 
 import os
 
 import pytest
 from aiida.engine import run_get_node
-from aiida.orm import Dict, SinglefileData, StructureData
+from aiida.orm import Dict, FolderData, SinglefileData, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
 from ase import io as ase_io
 
@@ -36,15 +36,27 @@ def test_validator_route_b_only():
     assert validate_workchain_inputs(inputs, None) is None
 
 
-def test_validator_both_routes():
-    """Providing both routes is rejected."""
-    inputs = {"castep": {"calc": {}}, "charge_density": object(), "castep_log": object()}
-    assert "not both" in validate_workchain_inputs(inputs, None)
+def test_validator_route_c_only():
+    """A retrieved folder alone is accepted."""
+    assert validate_workchain_inputs({"castep_retrieved": object()}, None) is None
+
+
+def test_validator_multiple_routes():
+    """Any combination of two or more routes is rejected."""
+    castep = {"castep": {"calc": {}}}
+    files = {"charge_density": object(), "castep_log": object()}
+    retrieved = {"castep_retrieved": object()}
+    assert "exactly one" in validate_workchain_inputs({**castep, **files}, None)
+    assert "exactly one" in validate_workchain_inputs({**castep, **retrieved}, None)
+    assert "exactly one" in validate_workchain_inputs({**files, **retrieved}, None)
+    assert "exactly one" in validate_workchain_inputs({**castep, **files, **retrieved}, None)
 
 
 def test_validator_neither_route():
-    """Providing no charge-density source is rejected."""
-    assert "no charge-density source" in validate_workchain_inputs({}, None)
+    """Providing no charge-density source is rejected, naming the alternatives."""
+    error = validate_workchain_inputs({}, None)
+    assert "no charge-density source" in error
+    assert "castep_retrieved" in error
 
 
 def test_validator_single_file():
@@ -91,7 +103,7 @@ def test_with_density_retrieved():
 
 
 # ---------------------------------------------------------------------------
-# Workchain-level validation and route B end-to-end
+# Workchain-level validation and routes B / C end-to-end
 # ---------------------------------------------------------------------------
 
 
@@ -128,3 +140,55 @@ def test_castep_muairss_uep_route_b(muairss_code, uep_opt_code):
     called_labels = [child.process_label for child in node.called]
     assert "structure_to_cell" in called_labels
     assert "MuairssUepWorkChain" in called_labels
+
+
+def _retrieved_folder():
+    """Build a FolderData mimicking an aiida-castep retrieved folder from the Si fixtures."""
+    folder = FolderData()
+    folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.den_fmt"), "aiida.den_fmt")
+    folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.castep"), "aiida.castep")
+    return folder
+
+
+def test_castep_muairss_uep_route_c(muairss_code, uep_opt_code):
+    """Route C end-to-end on Si: retrieved folder in, muon_sites out.
+
+    The inner workchain must receive files byte-identical to the route B
+    fixtures, which makes the outputs equivalent to route B without running
+    the full pipeline twice.
+    """
+    inputs = _base_inputs(muairss_code, uep_opt_code)
+    inputs["castep_retrieved"] = _retrieved_folder()
+
+    result, node = run_get_node(WorkflowFactory("pymuon.castep_muairss_uep"), **inputs)
+
+    assert node.is_finished_ok, f"exit status {node.exit_status}: {node.exit_message}"
+    assert "muon_sites" in result
+
+    # Extraction, .cell conversion and the inner workchain are on the provenance graph
+    called = {child.process_label: child for child in node.called}
+    assert "extract_uep_inputs" in called
+    assert "structure_to_cell" in called
+    assert "MuairssUepWorkChain" in called
+
+    # The extracted files match the route B fixtures and feed the inner workchain
+    extracted = called["extract_uep_inputs"].outputs
+    with open(os.path.join(INPUT_DIR, "Si.den_fmt"), "rb") as f:
+        assert extracted.charge_density.get_content(mode="rb") == f.read()
+    with open(os.path.join(INPUT_DIR, "Si.castep"), "rb") as f:
+        assert extracted.castep_log.get_content(mode="rb") == f.read()
+    inner = called["MuairssUepWorkChain"]
+    assert inner.inputs.charge_density.uuid == extracted.charge_density.uuid
+    assert inner.inputs.castep_log.uuid == extracted.castep_log.uuid
+
+
+def test_castep_muairss_uep_route_c_extraction_failure(muairss_code, uep_opt_code):
+    """A retrieved folder without a .den_fmt aborts with exit code 411, as route A does."""
+    folder = FolderData()
+    folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.castep"), "aiida.castep")
+    inputs = _base_inputs(muairss_code, uep_opt_code)
+    inputs["castep_retrieved"] = folder
+
+    _, node = run_get_node(WorkflowFactory("pymuon.castep_muairss_uep"), **inputs)
+
+    assert node.exit_status == 411

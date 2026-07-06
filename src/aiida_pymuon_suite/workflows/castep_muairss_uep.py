@@ -4,7 +4,8 @@ A CASTEP run on the pristine host (with ``write_formatted_density: true`` and
 ``*.den_fmt`` in the retrieve list) produces everything MuairssUepWorkChain
 needs. This module provides the calcfunctions converting those outputs into
 the SinglefileData nodes the workchain expects, and an outer workchain that
-either runs CASTEP itself (route A) or takes the files directly (route B).
+either runs CASTEP itself (route A), takes the files directly (route B), or
+reuses the retrieved folder of a finished CASTEP calculation (route C).
 
 aiida-castep is an optional dependency (``pip install -e '.[castep]'``);
 without it only route B is available.
@@ -16,7 +17,7 @@ from pathlib import Path
 import numpy as np
 from aiida.common import AttributeDict, exceptions
 from aiida.engine import ToContext, WorkChain, calcfunction, if_
-from aiida.orm import CalcJobNode, Dict, SinglefileData, StructureData
+from aiida.orm import CalcJobNode, Dict, FolderData, SinglefileData, StructureData
 from aiida.plugins import WorkflowFactory
 from ase import Atoms
 from ase import io as ase_io
@@ -133,19 +134,22 @@ def _castep_retrieved_folder(workchain):
 
 
 def validate_workchain_inputs(inputs, _):
-    """Ensure exactly one charge-density route is provided (route A xor route B)."""
+    """Ensure exactly one charge-density route is provided (route A, B or C)."""
     has_castep = bool(inputs.get("castep"))
+    has_retrieved = "castep_retrieved" in inputs
     n_files = sum(1 for key in ("charge_density", "castep_log") if key in inputs)
-    if has_castep and n_files:
+    if sum([has_castep, has_retrieved, n_files > 0]) > 1:
         return (
-            "provide either the 'castep' namespace (run CASTEP, route A) or "
-            "'charge_density' + 'castep_log' files (route B), not both"
+            "provide exactly one charge-density source: the 'castep' namespace (route A), "
+            "'charge_density' + 'castep_log' files (route B) or 'castep_retrieved' (route C), not several"
         )
-    if has_castep or n_files == 2:
+    if has_castep or has_retrieved or n_files == 2:
         return None
     if n_files == 1:
         return "both 'charge_density' and 'castep_log' are required when providing the files manually"
-    message = "no charge-density source: provide 'charge_density' + 'castep_log' (route B)"
+    message = (
+        "no charge-density source: provide 'charge_density' + 'castep_log' (route B) or 'castep_retrieved' (route C)"
+    )
     if has_aiida_castep():
         return message + " or the 'castep' namespace (route A)"
     return message + "; route A requires aiida-castep (pip install -e '.[castep]')"
@@ -154,12 +158,13 @@ def validate_workchain_inputs(inputs, _):
 class CastepMuairssUepWorkChain(WorkChain):
     """UEP muon stopping-site pipeline starting from a StructureData.
 
-    Wraps MuairssUepWorkChain with two ways of providing the CASTEP charge
+    Wraps MuairssUepWorkChain with three ways of providing the CASTEP charge
     density: route A runs a CastepBaseWorkChain on the pristine host (inputs
     under the ``castep`` namespace; ``write_formatted_density`` and the
     ``*.den_fmt`` retrieve entry are added automatically), route B takes
     ``charge_density`` and ``castep_log`` files directly, as MuairssUepWorkChain
-    does today.
+    does today, and route C takes ``castep_retrieved`` — the retrieved folder
+    of a finished CASTEP calculation — and extracts the files from it.
     """
 
     @classmethod
@@ -178,6 +183,12 @@ class CastepMuairssUepWorkChain(WorkChain):
             valid_type=SinglefileData,
             required=False,
             help="CASTEP log file (.castep) — route B.",
+        )
+        spec.input(
+            "castep_retrieved",
+            valid_type=FolderData,
+            required=False,
+            help="Retrieved folder of a finished CASTEP calculation — route C.",
         )
         if has_aiida_castep():
             spec.expose_inputs(
@@ -248,11 +259,20 @@ class CastepMuairssUepWorkChain(WorkChain):
         return None
 
     def prepare_uep_inputs(self):
-        """Collect the UEP input files (route B) and render the structure to .cell."""
-        if "charge_density" in self.inputs:
+        """Collect the UEP input files (routes B and C) and render the structure to .cell."""
+        if "castep_retrieved" in self.inputs:
+            try:
+                extracted = extract_uep_inputs(self.inputs.castep_retrieved)
+            except ValueError as exc:
+                self.report(f"extraction of UEP inputs failed: {exc}")
+                return self.exit_codes.ERROR_UEP_INPUT_EXTRACTION
+            self.ctx.charge_density = extracted["charge_density"]
+            self.ctx.castep_log = extracted["castep_log"]
+        elif "charge_density" in self.inputs:
             self.ctx.charge_density = self.inputs.charge_density
             self.ctx.castep_log = self.inputs.castep_log
         self.ctx.cell_file = structure_to_cell(self.inputs.structure)
+        return None
 
     def run_muairss_uep(self):
         """Submit the inner MuairssUepWorkChain with the collected files."""

@@ -6,7 +6,7 @@ The UEP method needs three artefacts of a CASTEP calculation on the pristine
 host crystal: the structure, the formatted charge density (``.den_fmt``) and
 the CASTEP log (``.castep``). ``CastepMuairssUepWorkChain`` (entry point
 ``pymuon.castep_muairss_uep``) wraps :class:`MuairssUepWorkChain` and offers
-two ways — *routes* — of providing them. Exactly one route must be used per
+three ways — *routes* — of providing them. Exactly one route must be used per
 run; a validator rejects anything else.
 
 Route B — provide the files manually
@@ -83,6 +83,33 @@ so the CASTEP inputs need to know nothing about UEP. The extracted
    Job resources for the CASTEP run go in the ``calc_options`` ``Dict``
    input of ``CastepBaseWorkChain`` — *not* ``options``, which controls
    workchain behaviour such as ``use_castep_bin``.
+
+Route C — reuse a finished CASTEP calculation
+---------------------------------------------
+
+If a suitable CASTEP calculation already exists in your database — run with
+``write_formatted_density: true`` and ``*.den_fmt`` in its retrieve list —
+point the workchain at its retrieved folder::
+
+    from aiida.orm import load_node
+
+    castep_calc = load_node(1234)  # a finished CastepCalculation
+
+    result, node = run_get_node(
+        WorkflowFactory("pymuon.castep_muairss_uep"),
+        structure=structure,
+        castep_retrieved=castep_calc.outputs.retrieved,
+        muairss_code=muairss_code,
+        uep_code=uep_code,
+        parameters=UepParameters({"geom_steps": 30}),
+    )
+
+The ``.den_fmt``/``.castep`` files are extracted by the same
+``extract_uep_inputs`` calcfunction as route A, so they appear on the
+provenance graph; a folder without them aborts with exit code 411. Unlike
+route A, no ``aiida-castep`` installation is needed. This is the route used
+by the AiiDAlab app: run CASTEP standalone, inspect it, then feed the
+approved run's retrieved folder to the muon search.
 
 Exit codes
 ----------

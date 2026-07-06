@@ -12,22 +12,24 @@ The UEP pipeline is: `pm-muairss` generates N random muon candidate positions (A
 N `pm-uep-opt` jobs relax each one in the electrostatic potential derived from a CASTEP
 charge density of the pristine host, and a clustering step identifies the distinct sites.
 
-Three entry points, depending on what you start from:
+Four entry points, depending on what you start from:
 
 | You have | Use | Entry point |
 |---|---|---|
 | `.cell` + `.den_fmt` + `.castep` files | `MuairssUepWorkChain` | `pymuon.muairss_uep` |
 | A structure + the CASTEP files | `CastepMuairssUepWorkChain` route B | `pymuon.castep_muairss_uep` |
 | Only a structure (CASTEP run by AiiDA) | `CastepMuairssUepWorkChain` route A | `pymuon.castep_muairss_uep` |
+| A structure + a finished CASTEP calc in the DB | `CastepMuairssUepWorkChain` route C | `pymuon.castep_muairss_uep` |
 
 `CastepMuairssUepWorkChain` takes a `StructureData` plus **exactly one** charge-density
-source: either the `castep` input namespace (route A — an
+source: the `castep` input namespace (route A — an
 [`aiida-castep`](https://github.com/zhubonan/aiida-castep) `CastepBaseWorkChain` runs on
-the pristine host first) or `charge_density` + `castep_log` `SinglefileData` inputs
-(route B). In route A the workchain injects `write_formatted_density: true` into PARAM
-and adds `*.den_fmt` to the retrieve list automatically — your CASTEP inputs don't need
-to know anything about UEP. Outputs (`muon_sites`, `allpos_file`) are identical for all
-entry points.
+the pristine host first), `charge_density` + `castep_log` `SinglefileData` inputs
+(route B), or `castep_retrieved` — the retrieved `FolderData` of a finished CASTEP
+calculation already in your database (route C). In route A the workchain injects
+`write_formatted_density: true` into PARAM and adds `*.den_fmt` to the retrieve list
+automatically — your CASTEP inputs don't need to know anything about UEP. Outputs
+(`muon_sites`, `allpos_file`) are identical for all entry points.
 
 Route A requires the optional `aiida-castep` dependency:
 
