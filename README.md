@@ -37,7 +37,7 @@ Route A requires the optional `aiida-castep` dependency:
 pip install -e '.[castep]'
 ```
 
-Without it, `MuairssUepWorkChain` and route B work as normal.
+Without it, `MuairssUepWorkChain` and routes B and C work as normal.
 
 See [`examples/`](examples/): `example_01.py` (inner workchain + clustering),
 `example_02_castep_route_b.py` (manual files), `example_03_castep_route_a.py`

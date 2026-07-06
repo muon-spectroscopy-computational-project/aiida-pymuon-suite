@@ -8,7 +8,7 @@ either runs CASTEP itself (route A), takes the files directly (route B), or
 reuses the retrieved folder of a finished CASTEP calculation (route C).
 
 aiida-castep is an optional dependency (``pip install -e '.[castep]'``);
-without it only route B is available.
+without it only route A is unavailable — routes B and C still work.
 """
 
 import tempfile
