@@ -1,11 +1,13 @@
 """Tests for calculations, parsers, and WorkChain."""
 
+import io
 import os
 
 import pytest
-from aiida.engine import run
-from aiida.orm import SinglefileData
-from aiida.plugins import CalculationFactory, DataFactory
+from aiida.common.links import LinkType
+from aiida.engine import ProcessState, run
+from aiida.orm import CalcJobNode, FolderData, SinglefileData
+from aiida.plugins import CalculationFactory, DataFactory, ParserFactory
 
 from . import TEST_DIR
 
@@ -172,3 +174,65 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
     result_files = folder2.list_object_names()
     uep_files = [f for f in result_files if f.endswith(".uep")]
     assert len(uep_files) > 0, "Expected at least one .uep file"
+
+
+# ---------------------------------------------------------------------------
+# UepOptParser — empty .uep detection (no pm-uep-opt needed)
+# ---------------------------------------------------------------------------
+
+def _parsed_exit_status(uep_opt_code, files):
+    """Parse a fake UepOptCalculation whose retrieved folder holds ``files``."""
+    node = CalcJobNode(computer=uep_opt_code.computer, process_type="aiida.calculations:pymuon.uep_opt")
+    node.set_option("resources", {"num_machines": 1, "num_mpiprocs_per_machine": 1})
+    node.set_option("parser_name", "pymuon.uep_opt")
+    node.set_process_state(ProcessState.FINISHED)
+    node.set_exit_status(0)
+    node.store()
+
+    retrieved = FolderData()
+    for name, content in files.items():
+        retrieved.put_object_from_filelike(io.BytesIO(content), name)
+    retrieved.base.links.add_incoming(node, LinkType.CREATE, "retrieved")
+    retrieved.store()
+    node.seal()
+
+    _results, calcfunction = ParserFactory("pymuon.uep_opt").parse_from_node(node, store_provenance=False)
+    return calcfunction.exit_status
+
+
+def test_uep_opt_parser_rejects_empty_uep(uep_opt_code):
+    """A zero-byte .uep means geomopt failed; the parser must not report success."""
+    exit_codes = CalculationFactory("pymuon.uep_opt").spec().exit_codes
+
+    status = _parsed_exit_status(
+        uep_opt_code,
+        {
+            "struct_1.uep": b"",
+            "pm-uep-opt.stdout": b'Performing UEP optimisation\nError:  The property "energy" is not available.\n',
+        },
+    )
+
+    assert status == exit_codes.ERROR_EMPTY_UEP_FILE.status
+
+
+def test_uep_opt_parser_accepts_non_empty_uep(uep_opt_code):
+    """A .uep with content parses cleanly and yields the uep_result folder."""
+    status = _parsed_exit_status(
+        uep_opt_code,
+        {
+            "struct_1.uep": b"Classical energy: -1363.2 eV\n",
+            "struct_1.uep.pkl": b"\x80\x04.",
+            "pm-uep-opt.stdout": b"Optimisation complete\n",
+        },
+    )
+
+    assert status == 0
+
+
+def test_uep_opt_parser_rejects_missing_uep(uep_opt_code):
+    """No .uep file at all is still the pre-existing ERROR_NO_UEP_FILE."""
+    exit_codes = CalculationFactory("pymuon.uep_opt").spec().exit_codes
+
+    status = _parsed_exit_status(uep_opt_code, {"pm-uep-opt.stdout": b"boom\n"})
+
+    assert status == exit_codes.ERROR_NO_UEP_FILE.status
