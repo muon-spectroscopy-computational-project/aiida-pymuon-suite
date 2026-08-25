@@ -26,6 +26,7 @@ def _list_files_recursive(folder_data, path=None):
 # MuairssUepWorkChain end-to-end (requires pm-muairss + pm-uep-opt + daemon)
 # ---------------------------------------------------------------------------
 
+
 def test_muairss_uep_workchain(muairss_code, uep_opt_code):
     """Run MuairssUepWorkChain on Si; assert muon_sites has .uep files and exit code 0."""
     UepParameters = DataFactory("pymuon.uep")
@@ -46,9 +47,7 @@ def test_muairss_uep_workchain(muairss_code, uep_opt_code):
 
     result, node = run_get_node(WorkflowFactory("pymuon.muairss_uep"), **inputs)
 
-    assert node.is_finished_ok, (
-        f"WorkChain finished with exit status {node.exit_status}: {node.exit_message}"
-    )
+    assert node.is_finished_ok, f"WorkChain finished with exit status {node.exit_status}: {node.exit_message}"
     assert "muon_sites" in result
 
     muon_sites = result["muon_sites"]
@@ -56,9 +55,7 @@ def test_muairss_uep_workchain(muairss_code, uep_opt_code):
 
     all_files = _list_files_recursive(muon_sites)
     uep_files = [f for f in all_files if f.endswith(".uep")]
-    assert len(uep_files) > 0, (
-        f"Expected at least one .uep file in muon_sites; got: {all_files}"
-    )
+    assert len(uep_files) > 0, f"Expected at least one .uep file in muon_sites; got: {all_files}"
 
     # Each .uep file should sit under a candidate-named subdirectory.
     for uep in uep_files:
@@ -68,6 +65,7 @@ def test_muairss_uep_workchain(muairss_code, uep_opt_code):
 # ---------------------------------------------------------------------------
 # cluster_muon_sites calcfunction
 # ---------------------------------------------------------------------------
+
 
 def test_cluster_calcfunction(muairss_code, uep_opt_code):
     """Run the WorkChain to obtain a real muon_sites FolderData, then cluster it."""
@@ -80,14 +78,17 @@ def test_cluster_calcfunction(muairss_code, uep_opt_code):
     charge_density_file = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "Si.den_fmt"))
     castep_log_file = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "Si.castep"))
 
-    wc_result, wc_node = run_get_node(WorkflowFactory("pymuon.muairss_uep"), **{
-        "muairss_code": muairss_code,
-        "uep_code": uep_opt_code,
-        "structure": structure_file,
-        "charge_density": charge_density_file,
-        "castep_log": castep_log_file,
-        "parameters": parameters,
-    })
+    wc_result, wc_node = run_get_node(
+        WorkflowFactory("pymuon.muairss_uep"),
+        **{
+            "muairss_code": muairss_code,
+            "uep_code": uep_opt_code,
+            "structure": structure_file,
+            "charge_density": charge_density_file,
+            "castep_log": castep_log_file,
+            "parameters": parameters,
+        },
+    )
     assert wc_node.is_finished_ok
     muon_sites = wc_result["muon_sites"]
 
@@ -125,22 +126,27 @@ def test_cluster_calcfunction_kmeans(muairss_code, uep_opt_code):
     charge_density_file = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "Si.den_fmt"))
     castep_log_file = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "Si.castep"))
 
-    wc_result, wc_node = run_get_node(WorkflowFactory("pymuon.muairss_uep"), **{
-        "muairss_code": muairss_code,
-        "uep_code": uep_opt_code,
-        "structure": structure_file,
-        "charge_density": charge_density_file,
-        "castep_log": castep_log_file,
-        "parameters": base_params,
-    })
+    wc_result, wc_node = run_get_node(
+        WorkflowFactory("pymuon.muairss_uep"),
+        **{
+            "muairss_code": muairss_code,
+            "uep_code": uep_opt_code,
+            "structure": structure_file,
+            "charge_density": charge_density_file,
+            "castep_log": castep_log_file,
+            "parameters": base_params,
+        },
+    )
     assert wc_node.is_finished_ok
     muon_sites = wc_result["muon_sites"]
 
-    kmeans_params = UepParameters({
-        "geom_steps": 30,
-        "clustering_method": "kmeans",
-        "clustering_kmeans_k": 2,
-    })
+    kmeans_params = UepParameters(
+        {
+            "geom_steps": 30,
+            "clustering_method": "kmeans",
+            "clustering_kmeans_k": 2,
+        }
+    )
 
     structure_file.store()
     result = run(

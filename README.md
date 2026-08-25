@@ -1,7 +1,4 @@
 [![Build Status][ci-badge]][ci-link]
-[![Coverage Status][cov-badge]][cov-link]
-[![Docs status][docs-badge]][docs-link]
-[![PyPI version][pypi-badge]][pypi-link]
 
 # aiida-pymuon-suite
 
@@ -14,8 +11,8 @@ intended to help developers get started with their AiiDA plugins.
 ## Repository contents
 
 * [`.github/`](.github/): [Github Actions](https://github.com/features/actions) configuration
-  * [`ci.yml`](.github/workflows/ci.yml): runs tests, checks test coverage and builds documentation at every new commit
-  * [`publish-on-pypi.yml`](.github/workflows/publish-on-pypi.yml): automatically deploy git tags to PyPI - just generate a [PyPI API token](https://pypi.org/help/#apitoken) for your PyPI account and add it to the `pypi_token` secret of your github repository
+  * [`ci.yml`](.github/workflows/ci.yml): lints, runs the test suite on Python 3.10-3.12, builds the distributions and builds the container image on every push and pull request
+  * [`release.yml`](.github/workflows/release.yml): on a `v*` tag, re-runs CI, publishes a GitHub release with the sdist and wheel attached, and pushes the container image to Harbor
 * [`aiida-pymuon-suite/`](aiida-pymuon-suite/): The main source code of the plugin package
   * [`data/`](aiida-pymuon-suite/data/): A new `DiffParameters` data class, used as input to the `DiffCalculation` `CalcJob` class
   * [`calculations.py`](aiida-pymuon-suite/calculations.py): A new `DiffCalculation` `CalcJob` class
@@ -119,11 +116,5 @@ MIT
 subindev.devadasan@stfc.ac.uk
 
 
-[ci-badge]: https://github.com/subindev-d/aiida-pymuon-suite/workflows/ci/badge.svg?branch=master
-[ci-link]: https://github.com/subindev-d/aiida-pymuon-suite/actions
-[cov-badge]: https://coveralls.io/repos/github/subindev-d/aiida-pymuon-suite/badge.svg?branch=master
-[cov-link]: https://coveralls.io/github/subindev-d/aiida-pymuon-suite?branch=master
-[docs-badge]: https://readthedocs.org/projects/aiida-pymuon-suite/badge
-[docs-link]: http://aiida-pymuon-suite.readthedocs.io/
-[pypi-badge]: https://badge.fury.io/py/aiida-pymuon-suite.svg
-[pypi-link]: https://badge.fury.io/py/aiida-pymuon-suite
+[ci-badge]: https://github.com/muon-spectroscopy-computational-project/aiida-pymuon-suite/actions/workflows/ci.yml/badge.svg
+[ci-link]: https://github.com/muon-spectroscopy-computational-project/aiida-pymuon-suite/actions/workflows/ci.yml
