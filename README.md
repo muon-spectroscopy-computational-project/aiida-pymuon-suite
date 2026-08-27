@@ -11,8 +11,8 @@ intended to help developers get started with their AiiDA plugins.
 ## Repository contents
 
 * [`.github/`](.github/): [Github Actions](https://github.com/features/actions) configuration
-  * [`ci.yml`](.github/workflows/ci.yml): lints, runs the test suite on Python 3.10-3.12, builds the distributions and builds the container image on every push and pull request
-  * [`release.yml`](.github/workflows/release.yml): on a `v*` tag, re-runs CI, publishes a GitHub release with the sdist and wheel attached, and pushes the container image to Harbor
+  * [`ci.yml`](.github/workflows/ci.yml): lints, runs the test suite on Python 3.10-3.12, builds the distributions and builds the container image on every push and pull request. Can also be run manually from the Actions tab with `push_image` set, to push a test-instance image to Harbor without cutting a release
+  * [`release.yml`](.github/workflows/release.yml): on a `v*` tag, re-runs CI, publishes a GitHub release with the sdist and wheel attached, and pushes the container image to Harbor. Can also be re-run manually from the Actions tab against an existing tag, with either half switched off
 * [`aiida-pymuon-suite/`](aiida-pymuon-suite/): The main source code of the plugin package
   * [`data/`](aiida-pymuon-suite/data/): A new `DiffParameters` data class, used as input to the `DiffCalculation` `CalcJob` class
   * [`calculations.py`](aiida-pymuon-suite/calculations.py): A new `DiffCalculation` `CalcJob` class
