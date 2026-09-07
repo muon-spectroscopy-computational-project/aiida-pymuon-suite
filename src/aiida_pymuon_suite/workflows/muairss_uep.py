@@ -145,7 +145,7 @@ class MuairssUepWorkChain(WorkChain):
         self.ctx.batch_keys = list(futures.keys())
         self.ctx.all_uep_keys = self.ctx.all_uep_keys + self.ctx.batch_keys
         self.report(
-            f"Submitted batch of {len(futures)} UepOptCalculations " f"({len(self.ctx.pending_candidates)} remaining)."
+            f"Submitted batch of {len(futures)} UepOptCalculations ({len(self.ctx.pending_candidates)} remaining)."
         )
         return ToContext(**futures)
 
