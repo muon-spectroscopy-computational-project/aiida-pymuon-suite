@@ -9,10 +9,10 @@ from aiida.plugins import CalculationFactory, DataFactory
 
 from . import TEST_DIR
 
-
 # ---------------------------------------------------------------------------
 # UepParameters (pure-Python, no AiiDA profile needed)
 # ---------------------------------------------------------------------------
+
 
 def test_parameter_validation():
     UepParameters = DataFactory("pymuon.uep")
@@ -28,15 +28,17 @@ def test_parameter_validation():
     assert params["clustering_hier_t"] == pytest.approx(0.3)
     assert params["clustering_kmeans_k"] == 4
 
-    params = UepParameters({
-        "poisson_r": 1.0,
-        "vdw_scale": 0.25,
-        "geom_steps": 100,
-        "random_seed": 42,
-        "allpos_ext": "xyz",
-        "clustering_method": "kmeans",
-        "clustering_kmeans_k": 3,
-    })
+    params = UepParameters(
+        {
+            "poisson_r": 1.0,
+            "vdw_scale": 0.25,
+            "geom_steps": 100,
+            "random_seed": 42,
+            "allpos_ext": "xyz",
+            "clustering_method": "kmeans",
+            "clustering_kmeans_k": 3,
+        }
+    )
     assert params["poisson_r"] == 1.0
     assert params["random_seed"] == 42
     assert params["allpos_ext"] == "xyz"
@@ -47,14 +49,16 @@ def test_parameter_validation():
 def test_render_yaml():
     UepParameters = DataFactory("pymuon.uep")
 
-    params = UepParameters({
-        "poisson_r": 0.7,
-        "vdw_scale": 0.8,
-        "geom_steps": 25,
-        "geom_force_tol": 0.02,
-        "uep_gw_factor": 4.0,
-        "allpos_ext": "cif",
-    })
+    params = UepParameters(
+        {
+            "poisson_r": 0.7,
+            "vdw_scale": 0.8,
+            "geom_steps": 25,
+            "geom_force_tol": 0.02,
+            "uep_gw_factor": 4.0,
+            "allpos_ext": "cif",
+        }
+    )
 
     yaml_output = params.render_yaml()
     assert "calculator: uep" in yaml_output
@@ -68,6 +72,7 @@ def test_render_yaml():
 # ---------------------------------------------------------------------------
 # MuairssCalculation integration test (requires pm-muairss on PATH)
 # ---------------------------------------------------------------------------
+
 
 def test_muairss_calculation(muairss_code):
     UepParameters = DataFactory("pymuon.uep")
@@ -85,8 +90,10 @@ def test_muairss_calculation(muairss_code):
     result = run(CalculationFactory("pymuon.muairss"), **inputs)
     assert "candidates_folder" in result
     from aiida.repository import FileType
+
     folder = result["candidates_folder"]
     all_files = []
+
     def collect(fd, path=None):
         for obj in fd.list_objects(path):
             p = f"{path}/{obj.name}" if path else obj.name
@@ -94,6 +101,7 @@ def test_muairss_calculation(muairss_code):
                 collect(fd, p)
             else:
                 all_files.append(p)
+
     collect(folder)
     yaml_files = [f for f in all_files if f.endswith(".yaml")]
     assert len(yaml_files) > 0, "Expected at least one candidate YAML"
@@ -102,6 +110,7 @@ def test_muairss_calculation(muairss_code):
 # ---------------------------------------------------------------------------
 # UepOptCalculation integration test (requires pm-uep-opt on PATH)
 # ---------------------------------------------------------------------------
+
 
 def test_uep_opt_calculation(muairss_code, uep_opt_code):
     """Run MuairssCalculation first, extract one YAML, then run UepOptCalculation."""
@@ -113,18 +122,23 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
     castep_log_file = SinglefileData(file=os.path.join(TEST_DIR, "input_files", "Si.castep"))
 
     # Step 1: generate candidates
-    muairss_result = run(CalculationFactory("pymuon.muairss"), **{
-        "code": muairss_code,
-        "parameters": parameters,
-        "structure": structure_file,
-        "metadata": {"options": {"max_wallclock_seconds": 300}},
-    })
+    muairss_result = run(
+        CalculationFactory("pymuon.muairss"),
+        **{
+            "code": muairss_code,
+            "parameters": parameters,
+            "structure": structure_file,
+            "metadata": {"options": {"max_wallclock_seconds": 300}},
+        },
+    )
     assert "candidates_folder" in muairss_result
 
     # Extract the first candidate YAML
     from aiida.repository import FileType
+
     folder = muairss_result["candidates_folder"]
     all_files = []
+
     def collect(fd, path=None):
         for obj in fd.list_objects(path):
             p = f"{path}/{obj.name}" if path else obj.name
@@ -132,6 +146,7 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
                 collect(fd, p)
             else:
                 all_files.append(p)
+
     collect(folder)
     yaml_files = [f for f in all_files if f.endswith(".yaml")]
     assert yaml_files
@@ -141,14 +156,17 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
     yaml_node.store()
 
     # Step 2: run UEP optimisation for this candidate
-    uep_result = run(CalculationFactory("pymuon.uep_opt"), **{
-        "code": uep_opt_code,
-        "candidate_yaml": yaml_node,
-        "charge_density": charge_density_file,
-        "castep_log": castep_log_file,
-        "parameters": parameters,
-        "metadata": {"options": {"max_wallclock_seconds": 300}},
-    })
+    uep_result = run(
+        CalculationFactory("pymuon.uep_opt"),
+        **{
+            "code": uep_opt_code,
+            "candidate_yaml": yaml_node,
+            "charge_density": charge_density_file,
+            "castep_log": castep_log_file,
+            "parameters": parameters,
+            "metadata": {"options": {"max_wallclock_seconds": 300}},
+        },
+    )
     assert "uep_result" in uep_result
     folder2 = uep_result["uep_result"]
     result_files = folder2.list_object_names()

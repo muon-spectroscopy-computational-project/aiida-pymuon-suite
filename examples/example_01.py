@@ -16,7 +16,6 @@ import click
 from aiida import cmdline, engine
 from aiida.orm import Int, SinglefileData
 from aiida.plugins import DataFactory, WorkflowFactory
-
 from aiida_pymuon_suite import helpers
 from aiida_pymuon_suite.workflows.muairss_uep import cluster_muon_sites
 
@@ -33,19 +32,21 @@ def run_workflow(muairss_code, uep_code, max_concurrent):
         uep_code = helpers.get_code(entry_point="pymuon.uep_opt", computer=computer)
 
     UepParameters = DataFactory("pymuon.uep")
-    parameters = UepParameters({
-        "poisson_r": 0.8,
-        "vdw_scale": 0.5,
-        "geom_steps": 30,
-        "geom_force_tol": 0.05,
-        "uep_gw_factor": 5.0,
-        "clustering_method": "hier",
-        "clustering_hier_t": 0.3,
-    })
+    parameters = UepParameters(
+        {
+            "poisson_r": 0.8,
+            "vdw_scale": 0.5,
+            "geom_steps": 30,
+            "geom_force_tol": 0.05,
+            "uep_gw_factor": 5.0,
+            "clustering_method": "hier",
+            "clustering_hier_t": 0.3,
+        }
+    )
 
-    structure      = SinglefileData(file=path.join(INPUT_DIR, "Si.cell"))
+    structure = SinglefileData(file=path.join(INPUT_DIR, "Si.cell"))
     charge_density = SinglefileData(file=path.join(INPUT_DIR, "Si.den_fmt"))
-    castep_log     = SinglefileData(file=path.join(INPUT_DIR, "Si.castep"))
+    castep_log = SinglefileData(file=path.join(INPUT_DIR, "Si.castep"))
 
     # --- Step 1: run the WorkChain (muairss → fan-out UEP opt → collect) ---
     print("Running MuairssUepWorkChain ...")
@@ -68,6 +69,7 @@ def run_workflow(muairss_code, uep_code, max_concurrent):
     print(f"WorkChain finished OK (pk={node.pk})")
 
     from aiida.repository import FileType
+
     def list_files(folder, path=None):
         out = []
         for obj in folder.list_objects(path):

@@ -1,9 +1,8 @@
 """UepParameters data node for aiida-pymuon-suite."""
 
+import yaml
 from aiida.orm import Dict
 from voluptuous import All, Any, Coerce, Optional, Range, Schema
-import yaml
-
 
 cmdline_options = {
     Optional("poisson_r", default=0.8): All(Coerce(float), Range(min=0.0)),

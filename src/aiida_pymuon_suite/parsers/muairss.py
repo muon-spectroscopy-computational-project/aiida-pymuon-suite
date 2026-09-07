@@ -50,7 +50,7 @@ class MuairssParser(Parser):
 
         candidates_folder = FolderData()
         for filepath in uep_files:
-            relative = filepath[len(uep_prefix):]
+            relative = filepath[len(uep_prefix) :]
             with self.retrieved.open(filepath, "rb") as f:
                 candidates_folder.put_object_from_filelike(f, relative)
 

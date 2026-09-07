@@ -115,6 +115,13 @@ select = [
   'RUF'  # ruff
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Classes loaded at call time via DataFactory/CalculationFactory are bound to CapWord
+# locals, e.g. `UepParameters = DataFactory("pymuon.uep")`. In src/ these bindings are
+# module-level, which N806 does not flag; only tests and examples do it inside functions.
+'tests/**' = ['N806']
+'examples/**' = ['N806']
+
 ## Hatch configurations
 
 [tool.hatch.version]

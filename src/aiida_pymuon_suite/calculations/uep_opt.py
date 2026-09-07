@@ -1,7 +1,6 @@
 """UepOptCalculation: runs pm-uep-opt for a single candidate muon site."""
 
 import yaml
-
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import FolderData, SinglefileData

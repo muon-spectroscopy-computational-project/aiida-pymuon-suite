@@ -145,8 +145,7 @@ class MuairssUepWorkChain(WorkChain):
         self.ctx.batch_keys = list(futures.keys())
         self.ctx.all_uep_keys = self.ctx.all_uep_keys + self.ctx.batch_keys
         self.report(
-            f"Submitted batch of {len(futures)} UepOptCalculations "
-            f"({len(self.ctx.pending_candidates)} remaining)."
+            f"Submitted batch of {len(futures)} UepOptCalculations ({len(self.ctx.pending_candidates)} remaining)."
         )
         return ToContext(**futures)
 
@@ -178,7 +177,7 @@ class MuairssUepWorkChain(WorkChain):
         for key in keys:
             if key in failed:
                 continue
-            candidate_name = key[len("uep_"):]
+            candidate_name = key[len("uep_") :]
             kwargs[candidate_name] = self.ctx[key].outputs.uep_result
 
         muon_sites = merge_uep_results(**kwargs)
@@ -195,20 +194,20 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
     import warnings
     from types import SimpleNamespace
 
-    import yaml
     from ase import io as ase_io
-    from pymuonsuite.muairss import load_muairss_collection, muairss_cluster
     from pymuonsuite.io.output import write_cluster_report
+    from pymuonsuite.muairss import load_muairss_collection, muairss_cluster
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    with tempfile.TemporaryDirectory() as tmpdir_name:
+        tmpdir = Path(tmpdir_name)
 
         # Write structure
         struct_path = tmpdir / structure.filename
-        struct_path.write_bytes(structure.get_content('rb'))
+        struct_path.write_bytes(structure.get_content("rb"))
 
         # Restore muon-airss-out tree under a uep/ subdirectory
         import pickle
+
         out_path = tmpdir / "muon-airss-out"
         uep_path = out_path / "uep"
         _restore_folder_data(muon_sites, uep_path)
@@ -258,6 +257,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
 
         # Build cluster_data: {calc_name: {cluster_id: {n, E_min}}}
         import numpy as np
+
         cluster_dict = {}
         for calc_name, (cl, classified, gvecs) in clusters.items():
             cinds = cl[0]  # cl is (cinds, cgroups); cinds is shape (n_structures,)
