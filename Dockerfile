@@ -1,6 +1,4 @@
-# Runtime image: AiiDA + pymuon-suite + this plugin, ready to run the UEP pipeline.
-
-ARG AIIDA_BASE_IMAGE=ghcr.io/aiidateam/aiida-core-base:edge
+ARG AIIDA_BASE_IMAGE=ghcr.io/aiidateam/aiida-core-base:2.5.2
 FROM ${AIIDA_BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="aiida-pymuon-suite" \
@@ -11,7 +9,7 @@ LABEL org.opencontainers.image.title="aiida-pymuon-suite" \
 USER root
 COPY --chown=${SYSTEM_UID}:${SYSTEM_GID} . /opt/aiida-pymuon-suite
 
-RUN PYTHONUSERBASE=/home/aiida/.local pip install --no-cache-dir --user /opt/aiida-pymuon-suite
+RUN pip install --no-cache-dir /opt/aiida-pymuon-suite
 
 USER ${SYSTEM_USER}
 
