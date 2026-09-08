@@ -5,14 +5,13 @@ import os
 
 import pytest
 from aiida.orm import FolderData, StructureData
-from ase import io as ase_io
-from ase.build import bulk
-
 from aiida_pymuon_suite.workflows.castep_muairss_uep import (
     CELL_FILENAME,
     extract_uep_inputs,
     structure_to_cell,
 )
+from ase import io as ase_io
+from ase.build import bulk
 
 from . import TEST_DIR
 

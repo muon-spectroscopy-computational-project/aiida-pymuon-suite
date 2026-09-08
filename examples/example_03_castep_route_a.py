@@ -28,9 +28,8 @@ import click
 from aiida import cmdline, engine
 from aiida.orm import Dict, Float, Str, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-from ase import io as ase_io
-
 from aiida_pymuon_suite import helpers
+from ase import io as ase_io
 
 INPUT_DIR = path.join(path.dirname(path.abspath(__file__)), "input_files")
 

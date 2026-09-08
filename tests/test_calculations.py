@@ -180,6 +180,7 @@ def test_uep_opt_calculation(muairss_code, uep_opt_code):
 # UepOptParser — empty .uep detection (no pm-uep-opt needed)
 # ---------------------------------------------------------------------------
 
+
 def _parsed_exit_status(uep_opt_code, files):
     """Parse a fake UepOptCalculation whose retrieved folder holds ``files``."""
     node = CalcJobNode(computer=uep_opt_code.computer, process_type="aiida.calculations:pymuon.uep_opt")

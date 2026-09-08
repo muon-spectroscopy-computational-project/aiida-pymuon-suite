@@ -6,14 +6,13 @@ import pytest
 from aiida.engine import run_get_node
 from aiida.orm import Dict, FolderData, SinglefileData, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-from ase import io as ase_io
-
 from aiida_pymuon_suite.workflows.castep_muairss_uep import (
     DENSITY_RETRIEVE_GLOB,
     _with_density_retrieved,
     _with_formatted_density,
     validate_workchain_inputs,
 )
+from ase import io as ase_io
 
 from . import TEST_DIR
 
