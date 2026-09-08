@@ -61,7 +61,7 @@ docs = [
 ]
 
 [project.urls]
-Source = "https://github.com/subindev-d/aiida-pymuon-suite"
+Source = "https://github.com/muon-spectroscopy-computational-project/aiida-pymuon-suite"
 
 [project.entry-points."aiida.data"]
 "pymuon.uep" = "aiida_pymuon_suite.data.parameters:UepParameters"
