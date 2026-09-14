@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from aiida.engine import ToContext, WorkChain, calcfunction, while_
-from aiida.orm import AbstractCode, Data, Dict, FolderData, Int, SinglefileData, load_node
+from aiida.orm import AbstractCode, Data, Dict, FolderData, Int, SinglefileData, StructureData, load_node
 from aiida.plugins import CalculationFactory, DataFactory
 from aiida.repository import FileType
 
@@ -69,6 +69,32 @@ def _find_cluster_structures(tmpdir, name):
             if path.is_file():
                 found.setdefault(path.name, path)
     return list(found.values())
+
+
+def _structure_data_from_atoms(atoms) -> StructureData:
+    """Convert a muonated ASE Atoms into a StructureData that CASTEP reads correctly.
+
+    pymuonsuite marks the muon in the ``castep_custom_species`` array as ``H:mu``
+    rather than in the chemical symbols, and AiiDA's own ASE import ignores that
+    array — the muon would silently become ordinary hydrogen. Giving it a Kind
+    named after the label makes aiida-castep write ``H:mu`` in POSITIONS_ABS (it
+    emits ``symbol:kind_name`` whenever the two differ), which is what the
+    SPECIES_MASS and SPECIES_GAMMA blocks key off.
+    """
+    structure = StructureData(cell=atoms.cell.tolist())
+    structure.set_pbc(atoms.pbc.tolist())
+
+    species = atoms.arrays.get("castep_custom_species")
+    if species is None:
+        species = atoms.get_chemical_symbols()
+
+    for atom, spec in zip(atoms, species):
+        symbol, _, label = str(spec).partition(":")
+        if label:
+            structure.append_atom(position=tuple(atom.position), symbols=symbol, name=label)
+        else:
+            structure.append_atom(position=tuple(atom.position), symbols=atom.symbol)
+    return structure
 
 
 class MuairssUepWorkChain(WorkChain):
@@ -221,10 +247,13 @@ class MuairssUepWorkChain(WorkChain):
 def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parameters: UepParameters) -> dict[str, Data]:
     """Cluster UEP candidate sites using pymuonsuite directly (no scheduler job).
 
-    Returns cluster_report (SinglefileData) and cluster_data (Dict), plus cluster_structures
-    (FolderData) when the parameters ask for the per-cluster minimum-energy structures to be
-    saved (clustering_save_type / clustering_save_format). Those files are the starting point
-    for a final DFT relaxation of each candidate stopping site.
+    Returns cluster_report (SinglefileData), cluster_data (Dict) and site_structures (one
+    StructureData per cluster, the minimum-energy structure in the requested supercell with
+    the muon as its own Kind) — the input for a final DFT relaxation of each candidate
+    stopping site. cluster_structures (FolderData) additionally holds those structures as
+    files when the parameters ask for them to be saved (clustering_save_type /
+    clustering_save_format); only the CELL format preserves the muon label on re-reading,
+    which is why site_structures is built in memory rather than parsed back from disk.
     """
     import warnings
     from types import SimpleNamespace
@@ -232,6 +261,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
     from ase import io as ase_io
     from pymuonsuite.io.output import write_cluster_report
     from pymuonsuite.muairss import load_muairss_collection, muairss_cluster
+    from pymuonsuite.utils import make_muonated_supercell
 
     with tempfile.TemporaryDirectory() as tmpdir_name:
         tmpdir = Path(tmpdir_name)
@@ -274,6 +304,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
                     file=io.BytesIO(b"No results to cluster."), filename="muon_clusters.txt"
                 ),
                 "cluster_data": Dict(dict={}),
+                "site_structures": {},
             }
 
         with warnings.catch_warnings():
@@ -300,23 +331,41 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
                 with open(struct_file, "rb") as f:
                     cluster_structures.put_object_from_filelike(f, struct_file.name)
 
-        # Build cluster_data: {calc_name: {cluster_id: {n, E_min}}}
+        # Build cluster_data {calc_name: {cluster_id: {n, E_min}}} plus one StructureData per
+        # cluster. Iterate cgroups rather than the raw cluster-ID array so the numbering used
+        # here is the same "Cluster N" the report shows — write_cluster_report enumerates
+        # cgroups too. Getting this wrong would silently pair a cluster's report entry with a
+        # different cluster's structure.
+        #
+        # site_structures keys assume a single calculator, which holds because render_yaml
+        # always injects `calculator: uep`.
         import numpy as np
 
+        supercell = params.setdefault("supercell", 1)
+        mu_symbol = params.setdefault("mu_symbol", "H:mu")
+
         cluster_dict = {}
-        for calc_name, (cl, classified, gvecs) in clusters.items():
-            cinds = cl[0]  # cl is (cinds, cgroups); cinds is shape (n_structures,)
+        site_structures = {}
+        for calc_name, ((_cinds, cgroups), ccolls, gvecs) in clusters.items():
             cluster_dict[calc_name] = {}
-            for cid in set(cinds.tolist()):
-                mask = np.where(cinds == cid)[0]
+            for index, group in enumerate(cgroups):
+                cid = index + 1
+                energies = gvecs[group, 0]
                 cluster_dict[calc_name][str(cid)] = {
-                    "n": int(len(mask)),
-                    "E_min": float(np.min(gvecs[mask, 0])),
+                    "n": int(len(group)),
+                    "E_min": float(np.min(energies)),
                 }
+                # The cluster's lowest-energy structure, expanded to the requested supercell.
+                # make_muonated_supercell keeps the muon last and re-labels it as mu_symbol.
+                best = ccolls[cid][int(np.argmin(energies))].structures[0]
+                site_structures[f"cluster_{cid}"] = _structure_data_from_atoms(
+                    make_muonated_supercell(best, supercell, mu_symbol)
+                )
 
     results = {
         "cluster_report": cluster_report,
         "cluster_data": Dict(dict=cluster_dict),
+        "site_structures": site_structures,
     }
     if cluster_structures is not None:
         results["cluster_structures"] = cluster_structures

@@ -3,7 +3,7 @@
 import os
 
 from aiida.engine import run, run_get_node
-from aiida.orm import Dict, FolderData, SinglefileData
+from aiida.orm import Dict, FolderData, SinglefileData, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
 from aiida.repository import FileType
 
@@ -114,6 +114,21 @@ def test_cluster_calcfunction(muairss_code, uep_opt_code):
     # cluster_data should be a non-empty mapping when there are candidates.
     assert cluster_data.get_dict(), "cluster_data Dict should be non-empty"
 
+    # One StructureData per cluster, keyed to match the "Cluster N" headings in the
+    # report, each carrying the muon as its own Kind.
+    site_structures = cluster_result["site_structures"]
+    assert site_structures, "site_structures should be non-empty when there are candidates"
+
+    n_clusters = sum(len(entries) for entries in cluster_data.get_dict().values())
+    assert len(site_structures) == n_clusters, "one structure per cluster"
+    assert set(site_structures) == {f"cluster_{i + 1}" for i in range(n_clusters)}
+
+    for key, site in site_structures.items():
+        assert isinstance(site, StructureData), key
+        muon_kinds = [k for k in site.kinds if k.name != k.symbol]
+        assert len(muon_kinds) == 1, f"{key} should have exactly one muon kind"
+        assert muon_kinds[0].symbol == "H", f"{key} muon should be an H kind"
+
 
 def test_cluster_calcfunction_kmeans(muairss_code, uep_opt_code):
     """Re-cluster the same muon_sites with kmeans to exercise the alternative branch."""
@@ -159,6 +174,8 @@ def test_cluster_calcfunction_kmeans(muairss_code, uep_opt_code):
     assert isinstance(result["cluster_report"], SinglefileData)
     assert result["cluster_report"].get_content()
     assert isinstance(result["cluster_data"], Dict)
+    assert result["site_structures"], "kmeans clustering should also yield site structures"
+    assert all(isinstance(s, StructureData) for s in result["site_structures"].values())
 
 
 # ---------------------------------------------------------------------------
@@ -199,3 +216,46 @@ def test_find_cluster_structures_none_saved(tmp_path):
 
     (tmp_path / "muon_clusters.txt").write_text("the report")
     assert _find_cluster_structures(tmp_path, "muon") == []
+
+
+# ---------------------------------------------------------------------------
+# ASE -> StructureData conversion (needs a profile, no codes)
+# ---------------------------------------------------------------------------
+
+
+def _muonated_atoms():
+    """Si cell with a muon last, labelled the way pymuonsuite labels it."""
+    import numpy as np
+    from ase import Atoms
+
+    atoms = Atoms(
+        symbols=["Si", "Si", "H"],
+        positions=[(0.0, 0.0, 0.0), (1.3575, 1.3575, 1.3575), (2.715, 2.715, 2.715)],
+        cell=[(0.0, 2.715, 2.715), (2.715, 0.0, 2.715), (2.715, 2.715, 0.0)],
+        pbc=True,
+    )
+    atoms.set_array("castep_custom_species", np.array(["Si", "Si", "H:mu"]))
+    return atoms
+
+
+def test_structure_data_gives_the_muon_its_own_kind():
+    """H:mu must become a Kind named 'mu', or CASTEP sees ordinary hydrogen."""
+    from aiida_pymuon_suite.workflows.muairss_uep import _structure_data_from_atoms
+
+    structure = _structure_data_from_atoms(_muonated_atoms())
+
+    assert [(k.name, k.symbol) for k in structure.kinds] == [("Si", "Si"), ("mu", "H")]
+    assert structure.sites[-1].kind_name == "mu"
+    assert structure.pbc == (True, True, True)
+
+
+def test_structure_data_without_custom_species_falls_back_to_symbols():
+    """A plain Atoms (no muon label) converts with kind names equal to symbols."""
+    from aiida_pymuon_suite.workflows.muairss_uep import _structure_data_from_atoms
+
+    atoms = _muonated_atoms()
+    del atoms.arrays["castep_custom_species"]
+
+    structure = _structure_data_from_atoms(atoms)
+
+    assert [(k.name, k.symbol) for k in structure.kinds] == [("Si", "Si"), ("H", "H")]
