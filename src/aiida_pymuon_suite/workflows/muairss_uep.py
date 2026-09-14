@@ -48,6 +48,29 @@ def _restore_folder_data(folder_data, dest_path):
             full_dest.write_bytes(src.read())
 
 
+def _find_cluster_structures(tmpdir, name):
+    """Return the per-cluster minimum-energy structure files written by write_cluster_report.
+
+    pymuonsuite builds the seedname as ``<name>_<calc>_min_cluster_<i>`` and writes it with
+    ``os.path.join(clustering_save_path, seedname)``. Because cluster_muon_sites sets
+    params["name"] to an absolute path (so the report lands in the temp dir), the seedname is
+    absolute too and os.path.join discards clustering_save_path — the structures end up at the
+    temp dir root instead of under ``<name>_clusters/<calc>/``. Look in both places so this
+    keeps working if that is ever fixed upstream.
+    """
+    tmpdir = Path(tmpdir)
+    found = {}
+    for path in sorted(tmpdir.glob(f"{name}_*_min_cluster_*")):
+        if path.is_file():
+            found[path.name] = path
+    clusters_dir = tmpdir / f"{name}_clusters"
+    if clusters_dir.is_dir():
+        for path in sorted(clusters_dir.rglob("*")):
+            if path.is_file():
+                found.setdefault(path.name, path)
+    return list(found.values())
+
+
 class MuairssUepWorkChain(WorkChain):
     """WorkChain: MuairssCalculation → batched UepOptCalculation per candidate → collect results."""
 
@@ -198,7 +221,10 @@ class MuairssUepWorkChain(WorkChain):
 def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parameters: UepParameters) -> dict[str, Data]:
     """Cluster UEP candidate sites using pymuonsuite directly (no scheduler job).
 
-    Returns cluster_report (SinglefileData) and cluster_data (Dict).
+    Returns cluster_report (SinglefileData) and cluster_data (Dict), plus cluster_structures
+    (FolderData) when the parameters ask for the per-cluster minimum-energy structures to be
+    saved (clustering_save_type / clustering_save_format). Those files are the starting point
+    for a final DFT relaxation of each candidate stopping site.
     """
     import warnings
     from types import SimpleNamespace
@@ -264,6 +290,16 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
         report_path = tmpdir / f"{params['name']}_clusters.txt"
         cluster_report = SinglefileData(file=str(report_path))
 
+        # Keep the saved cluster structures — they are written into the temp dir and would
+        # otherwise be discarded with it.
+        cluster_structures = None
+        structure_paths = _find_cluster_structures(tmpdir, params["name"])
+        if structure_paths:
+            cluster_structures = FolderData()
+            for struct_file in structure_paths:
+                with open(struct_file, "rb") as f:
+                    cluster_structures.put_object_from_filelike(f, struct_file.name)
+
         # Build cluster_data: {calc_name: {cluster_id: {n, E_min}}}
         import numpy as np
 
@@ -278,7 +314,10 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
                     "E_min": float(np.min(gvecs[mask, 0])),
                 }
 
-    return {
+    results = {
         "cluster_report": cluster_report,
         "cluster_data": Dict(dict=cluster_dict),
     }
+    if cluster_structures is not None:
+        results["cluster_structures"] = cluster_structures
+    return results

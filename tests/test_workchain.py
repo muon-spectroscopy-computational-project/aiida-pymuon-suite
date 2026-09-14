@@ -159,3 +159,43 @@ def test_cluster_calcfunction_kmeans(muairss_code, uep_opt_code):
     assert isinstance(result["cluster_report"], SinglefileData)
     assert result["cluster_report"].get_content()
     assert isinstance(result["cluster_data"], Dict)
+
+
+# ---------------------------------------------------------------------------
+# Cluster structure collection (no codes / profile needed)
+# ---------------------------------------------------------------------------
+
+
+def test_find_cluster_structures(tmp_path):
+    """The saved minimum-energy structures are found in both possible layouts."""
+    from aiida_pymuon_suite.workflows.muairss_uep import _find_cluster_structures
+
+    # Where they actually land: params["name"] is an absolute path, so the seedname is
+    # absolute and os.path.join drops the clustering save folder.
+    (tmp_path / "muon_uep_min_cluster_1.cell").write_text("cluster 1")
+    (tmp_path / "muon_uep_min_cluster_2.cell").write_text("cluster 2")
+    # Where they would land if that were fixed upstream.
+    (tmp_path / "muon_clusters" / "uep").mkdir(parents=True)
+    (tmp_path / "muon_clusters" / "uep" / "muon_uep_min_cluster_3.cell").write_text("cluster 3")
+    # Everything else in the temp dir must be ignored.
+    (tmp_path / "muon_clusters.txt").write_text("the report")
+    (tmp_path / "muon_muon_uep_clusters.dat").write_text("raw cluster data")
+    (tmp_path / "Si.cell").write_text("the input structure")
+    candidate = tmp_path / "muon-airss-out" / "uep" / "struct_1"
+    candidate.mkdir(parents=True)
+    (candidate / "struct_1.cell").write_text("a candidate, not a cluster")
+
+    found = sorted(p.name for p in _find_cluster_structures(tmp_path, "muon"))
+    assert found == [
+        "muon_uep_min_cluster_1.cell",
+        "muon_uep_min_cluster_2.cell",
+        "muon_uep_min_cluster_3.cell",
+    ]
+
+
+def test_find_cluster_structures_none_saved(tmp_path):
+    """No structures saved (clustering_save_type unset) yields an empty list."""
+    from aiida_pymuon_suite.workflows.muairss_uep import _find_cluster_structures
+
+    (tmp_path / "muon_clusters.txt").write_text("the report")
+    assert _find_cluster_structures(tmp_path, "muon") == []
