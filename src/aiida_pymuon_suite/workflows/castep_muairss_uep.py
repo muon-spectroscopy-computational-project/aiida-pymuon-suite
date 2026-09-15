@@ -31,6 +31,39 @@ except exceptions.MissingEntryPointError:
 
 CELL_FILENAME = "aiida.cell"
 DENSITY_SUFFIX = ".den_fmt"
+
+#: A CASTEP formatted density begins with this marker. pm-uep-opt rejects anything else
+#: with "FMT file has no header" — but only after every UepOptCalculation has been
+#: submitted and run, so checking it up front turns a slow, confusing failure into an
+#: immediate one. Test fixtures that write a placeholder .den_fmt are the usual culprit.
+DENSITY_HEADER = b"BEGIN header"
+
+#: Bytes read from the start of a density when checking the header.
+DENSITY_HEADER_PEEK = 4096
+
+
+def density_has_header(folder, path) -> bool:
+    """True when `path` in `folder` looks like a CASTEP formatted density file."""
+    try:
+        # mode="rb": NodeRepository.open defaults to text, and `bytes in str` raises.
+        with folder.base.repository.open(path, mode="rb") as handle:
+            return DENSITY_HEADER in handle.read(DENSITY_HEADER_PEEK)
+    except Exception:
+        return False
+
+
+def find_valid_density(folder):
+    """Return the path of the first usable `.den_fmt` in `folder`, or None.
+
+    A file with the right suffix but no header is treated as absent: it cannot be
+    used, and saying so here is far cheaper than discovering it downstream.
+    """
+    from aiida_pymuon_suite.workflows.muairss_uep import _list_files_recursive
+
+    for path in _list_files_recursive(folder):
+        if path.endswith(DENSITY_SUFFIX) and density_has_header(folder, path):
+            return path
+    return None
 CASTEP_LOG_SUFFIX = ".castep"
 DENSITY_RETRIEVE_GLOB = "*.den_fmt"
 
@@ -142,6 +175,12 @@ def validate_workchain_inputs(inputs, _):
         return (
             "provide exactly one charge-density source: the 'castep' namespace (route A), "
             "'charge_density' + 'castep_log' files (route B) or 'castep_retrieved' (route C), not several"
+        )
+    if has_retrieved and find_valid_density(inputs["castep_retrieved"]) is None:
+        return (
+            f"'castep_retrieved' has no usable charge density: no file ending "
+            f"{DENSITY_SUFFIX} starts with '{DENSITY_HEADER.decode()}'. The CASTEP run "
+            f"either did not write a formatted density, or is not a real run."
         )
     if has_castep or has_retrieved or n_files == 2:
         return None

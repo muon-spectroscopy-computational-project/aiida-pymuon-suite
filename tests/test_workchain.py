@@ -1,5 +1,6 @@
 """End-to-end tests for MuairssUepWorkChain and cluster_muon_sites calcfunction."""
 
+import io
 import os
 
 from aiida.engine import run, run_get_node
@@ -259,3 +260,43 @@ def test_structure_data_without_custom_species_falls_back_to_symbols():
     structure = _structure_data_from_atoms(atoms)
 
     assert [(k.name, k.symbol) for k in structure.kinds] == [("Si", "Si"), ("H", "H")]
+
+
+# ---------------------------------------------------------------------------
+# Charge-density validation
+# ---------------------------------------------------------------------------
+
+
+def _folder_with_density(content: bytes):
+    """FolderData holding a single .den_fmt with the given content."""
+    folder = FolderData()
+    folder.put_object_from_filelike(io.BytesIO(content), "aiida.den_fmt")
+    return folder
+
+
+def test_density_with_a_castep_header_is_accepted():
+    from aiida_pymuon_suite.workflows.castep_muairss_uep import find_valid_density
+
+    folder = _folder_with_density(b"     BEGIN header\n   Real Lattice(A)\n 0.0 2.7 2.7\n")
+
+    assert find_valid_density(folder) == "aiida.den_fmt"
+
+
+def test_density_without_a_header_is_rejected():
+    """A placeholder .den_fmt must not pass as a charge density.
+
+    pm-uep-opt only reports "FMT file has no header" after every UepOptCalculation
+    has been submitted and run, so the whole workflow fails slowly and obscurely.
+    """
+    from aiida_pymuon_suite.workflows.castep_muairss_uep import find_valid_density
+
+    assert find_valid_density(_folder_with_density(b"density")) is None
+
+
+def test_folder_without_a_density_is_rejected():
+    from aiida_pymuon_suite.workflows.castep_muairss_uep import find_valid_density
+
+    folder = FolderData()
+    folder.put_object_from_filelike(io.BytesIO(b"whatever"), "aiida.castep")
+
+    assert find_valid_density(folder) is None
