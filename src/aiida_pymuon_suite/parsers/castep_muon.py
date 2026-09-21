@@ -65,8 +65,7 @@ def desort_args_from_species(castep_species, structure) -> list:
         candidates = remaining.get(site.kind_name)
         if not candidates:
             raise ValueError(
-                f"CASTEP returned no atom for kind {site.kind_name!r}; "
-                f"got species {list(castep_species)!r}"
+                f"CASTEP returned no atom for kind {site.kind_name!r}; got species {list(castep_species)!r}"
             )
         order.append(candidates.pop(0))
     return order
@@ -138,9 +137,7 @@ if _BASE is None:  # pragma: no cover - exercised only without aiida-castep
         """Placeholder used when aiida-castep is not installed."""
 
         def parse(self, **kwargs):
-            raise ImportError(
-                "pymuon.castep_muon requires aiida-castep: pip install -e '.[castep]'"
-            )
+            raise ImportError("pymuon.castep_muon requires aiida-castep: pip install -e '.[castep]'")
 
 else:
 

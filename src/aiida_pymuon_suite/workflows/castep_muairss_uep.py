@@ -64,6 +64,8 @@ def find_valid_density(folder):
         if path.endswith(DENSITY_SUFFIX) and density_has_header(folder, path):
             return path
     return None
+
+
 CASTEP_LOG_SUFFIX = ".castep"
 DENSITY_RETRIEVE_GLOB = "*.den_fmt"
 
