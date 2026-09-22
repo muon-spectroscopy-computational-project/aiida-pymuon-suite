@@ -1,5 +1,6 @@
 """Tests for CastepMuairssUepWorkChain (validator, input patching, routes B and C end-to-end)."""
 
+import io
 import os
 
 import pytest
@@ -36,8 +37,26 @@ def test_validator_route_b_only():
 
 
 def test_validator_route_c_only():
-    """A retrieved folder alone is accepted."""
-    assert validate_workchain_inputs({"castep_retrieved": object()}, None) is None
+    """A retrieved folder holding a real density is accepted."""
+    folder = FolderData()
+    folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.den_fmt"), "aiida.den_fmt")
+    assert validate_workchain_inputs({"castep_retrieved": folder}, None) is None
+
+
+def test_validator_route_c_density_without_header():
+    """A .den_fmt lacking the CASTEP header is rejected at submission, not downstream."""
+    folder = FolderData()
+    folder.put_object_from_filelike(io.BytesIO(b"not a density\n"), "aiida.den_fmt")
+    error = validate_workchain_inputs({"castep_retrieved": folder}, None)
+    assert "no usable charge density" in error
+
+
+def test_validator_route_c_no_density():
+    """A retrieved folder with no .den_fmt at all is rejected the same way."""
+    folder = FolderData()
+    folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.castep"), "aiida.castep")
+    error = validate_workchain_inputs({"castep_retrieved": folder}, None)
+    assert "no usable charge density" in error
 
 
 def test_validator_multiple_routes():
@@ -182,12 +201,15 @@ def test_castep_muairss_uep_route_c(muairss_code, uep_opt_code):
 
 
 def test_castep_muairss_uep_route_c_extraction_failure(muairss_code, uep_opt_code):
-    """A retrieved folder without a .den_fmt aborts with exit code 411, as route A does."""
+    """A retrieved folder without a usable .den_fmt is refused at submission.
+
+    This used to run and abort with exit code 411; the input validator now catches
+    it first, so the failure costs nothing instead of a full fan-out.
+    """
     folder = FolderData()
     folder.put_object_from_file(os.path.join(INPUT_DIR, "Si.castep"), "aiida.castep")
     inputs = _base_inputs(muairss_code, uep_opt_code)
     inputs["castep_retrieved"] = folder
 
-    _, node = run_get_node(WorkflowFactory("pymuon.castep_muairss_uep"), **inputs)
-
-    assert node.exit_status == 411
+    with pytest.raises(ValueError, match="no usable charge density"):
+        run_get_node(WorkflowFactory("pymuon.castep_muairss_uep"), **inputs)
