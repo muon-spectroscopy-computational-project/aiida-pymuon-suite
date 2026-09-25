@@ -9,11 +9,20 @@ taking `symbol` straight from the CASTEP output. For a muon run that symbol is
 ``UnsupportedSpeciesError`` and the whole parse dies, taking the energy and the
 relaxed geometry with it even though neither had anything to do with the problem.
 
-This parser reuses aiida-castep's parser wholesale and fixes only that one step,
+This parser reuses aiida-castep's parser wholesale and fixes that one step,
 splitting ``H:mu`` into element ``H`` with Kind name ``mu`` — the mirror image of
 ``_structure_data_from_atoms``, which builds the input structure the same way.
 Keeping the Kind name is also what lets aiida-castep's own ``desort_structure``
 succeed: it asserts the parsed kind names equal the input's.
+
+One more patch lives here that has nothing to do with custom species: aiida-castep
+passes ``symbols`` to ``TrajectoryData.set_trajectory`` as a numpy array, which
+aiida-core dropped support for in 2.8 (``_internal_validate`` now takes a list or a
+tuple only, where it used to take any iterable). That breaks every run with a .geom
+file — i.e. every geometry optimisation — and it dies inside the same ``parse()``
+call, so it is corrected in the same place. Delete it once aiida-castep releases a
+fix; a list is valid input for every aiida-core version, so the patch is harmless in
+the meantime.
 """
 
 from contextlib import contextmanager
@@ -75,17 +84,21 @@ def desort_args_from_species(castep_species, structure) -> list:
 def _custom_species_aware():
     """Make aiida-castep's parser handle custom species for one `parse()` call.
 
-    Two module-level names in ``aiida_castep.parsers.castep`` need replacing and
-    neither has a subclass hook, so they are swapped for the duration of the parse:
+    Three names need replacing and none has a subclass hook, so they are swapped for
+    the duration of the parse:
 
     * ``structure_from_input`` — builds the output StructureData; the stock one
       passes ``H:mu`` to AiiDA as an element and raises UnsupportedSpeciesError.
     * ``get_desort_args`` — un-sorts CASTEP's atom order; the stock one assumes a
       sort by atomic number that custom species do not follow.
+    * ``TrajectoryData.set_trajectory`` — aiida-castep passes ``symbols`` as a numpy
+      array; aiida-core >= 2.8 accepts only a list or a tuple. The method is patched
+      rather than the class subclassed, so the stored node keeps its normal type.
 
     ``parse()`` is synchronous, so the swap cannot interleave with another parse in
     the same daemon worker.
     """
+    from aiida.orm import TrajectoryData
     from aiida_castep.parsers import castep as castep_parser_module
     from aiida_castep.parsers import utils as castep_utils_module
 
@@ -104,6 +117,12 @@ def _custom_species_aware():
 
     original_build = castep_parser_module.structure_from_input
     original_get_desort_args = castep_utils_module.get_desort_args
+    original_set_trajectory = TrajectoryData.set_trajectory
+
+    def _set_trajectory(self, symbols, *args, **kwargs):
+        # `symbols` is set_trajectory's first parameter, so this covers both the
+        # keyword call aiida-castep makes and a positional one.
+        return original_set_trajectory(self, [str(s) for s in symbols], *args, **kwargs)
 
     # Both modules need patching: castep.py uses get_desort_args directly for the
     # trajectory arrays, while desort_structure resolves it from utils.py, its own
@@ -111,12 +130,14 @@ def _custom_species_aware():
     castep_parser_module.structure_from_input = _record_and_build
     castep_parser_module.get_desort_args = _desort_args
     castep_utils_module.get_desort_args = _desort_args
+    TrajectoryData.set_trajectory = _set_trajectory
     try:
         yield
     finally:
         castep_parser_module.structure_from_input = original_build
         castep_parser_module.get_desort_args = original_get_desort_args
         castep_utils_module.get_desort_args = original_get_desort_args
+        TrajectoryData.set_trajectory = original_set_trajectory
 
 
 def _castep_parser_class():

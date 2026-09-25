@@ -82,3 +82,64 @@ def test_desort_rejects_species_that_do_not_match_the_input():
 
     with pytest.raises(ValueError, match="no atom for kind"):
         desort_args_from_species(["Si", "Si", "Si"], _input_structure())
+
+
+def _trajectory_call_kwargs():
+    """The arguments aiida-castep's parser passes for a .geom run, numpy and all.
+
+    Mirrors `aiida_castep.parsers.castep`, which builds every argument -- symbols
+    included -- with `np.asarray`.
+    """
+    import numpy as np
+
+    return {
+        "stepids": np.asarray([1]),
+        "cells": np.asarray([CELL]),
+        "symbols": np.asarray(["Si", "Si", "mu"]),
+        "positions": np.asarray([[(0.0, 0.0, 0.0), (1.3575, 1.3575, 1.3575), (1.357, 1.357, 4.072)]]),
+    }
+
+
+def test_numpy_symbols_are_accepted_during_the_parse():
+    """aiida-core >= 2.8 rejects a numpy array of symbols, which kills every .geom run."""
+    pytest.importorskip("aiida_castep")
+    from aiida.orm import TrajectoryData
+
+    from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
+
+    trajectory = TrajectoryData()
+    with _custom_species_aware():
+        trajectory.set_trajectory(**_trajectory_call_kwargs())
+
+    assert list(trajectory.symbols) == ["Si", "Si", "mu"]
+
+
+def test_set_trajectory_is_restored_afterwards():
+    """The patch must not outlive the parse: other code keeps aiida-core's behaviour."""
+    pytest.importorskip("aiida_castep")
+    from aiida.orm import TrajectoryData
+
+    from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
+
+    original = TrajectoryData.set_trajectory
+    with _custom_species_aware():
+        pass
+
+    assert TrajectoryData.set_trajectory is original
+
+
+def test_plain_list_of_symbols_still_works():
+    """The wrapper must be a no-op for callers that already pass a list."""
+    pytest.importorskip("aiida_castep")
+    from aiida.orm import TrajectoryData
+
+    from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
+
+    kwargs = _trajectory_call_kwargs()
+    kwargs["symbols"] = ["Si", "Si", "mu"]
+
+    trajectory = TrajectoryData()
+    with _custom_species_aware():
+        trajectory.set_trajectory(**kwargs)
+
+    assert list(trajectory.symbols) == ["Si", "Si", "mu"]
