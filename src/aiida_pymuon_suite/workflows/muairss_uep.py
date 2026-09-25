@@ -159,8 +159,7 @@ class MuairssUepWorkChain(WorkChain):
         folder = calc.outputs.candidates_folder
         yaml_paths = [p for p in _list_files_recursive(folder) if p.endswith(".yaml")]
         self.report(
-            f"Found {len(yaml_paths)} candidate YAMLs — "
-            f"processing in batches of {self.inputs.max_concurrent.value}."
+            f"Found {len(yaml_paths)} candidate YAMLs — processing in batches of {self.inputs.max_concurrent.value}."
         )
 
         # Store all yaml nodes upfront as (key, pk) pairs so the pending list is safely checkpointed.
@@ -352,7 +351,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
                 cid = index + 1
                 energies = gvecs[group, 0]
                 cluster_dict[calc_name][str(cid)] = {
-                    "n": int(len(group)),
+                    "n": len(group),
                     "E_min": float(np.min(energies)),
                 }
                 # The cluster's lowest-energy structure, expanded to the requested supercell.

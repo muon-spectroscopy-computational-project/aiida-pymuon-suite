@@ -104,7 +104,6 @@ def test_numpy_symbols_are_accepted_during_the_parse():
     """aiida-core >= 2.8 rejects a numpy array of symbols, which kills every .geom run."""
     pytest.importorskip("aiida_castep")
     from aiida.orm import TrajectoryData
-
     from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
 
     trajectory = TrajectoryData()
@@ -118,7 +117,6 @@ def test_set_trajectory_is_restored_afterwards():
     """The patch must not outlive the parse: other code keeps aiida-core's behaviour."""
     pytest.importorskip("aiida_castep")
     from aiida.orm import TrajectoryData
-
     from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
 
     original = TrajectoryData.set_trajectory
@@ -132,7 +130,6 @@ def test_plain_list_of_symbols_still_works():
     """The wrapper must be a no-op for callers that already pass a list."""
     pytest.importorskip("aiida_castep")
     from aiida.orm import TrajectoryData
-
     from aiida_pymuon_suite.parsers.castep_muon import _custom_species_aware
 
     kwargs = _trajectory_call_kwargs()
