@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from aiida.engine import ToContext, WorkChain, calcfunction, while_
-from aiida.orm import AbstractCode, Data, Dict, FolderData, Int, SinglefileData, load_node
+from aiida.orm import AbstractCode, Data, Dict, FolderData, Int, SinglefileData, StructureData, load_node
 from aiida.plugins import CalculationFactory, DataFactory
 from aiida.repository import FileType
 
@@ -48,6 +48,55 @@ def _restore_folder_data(folder_data, dest_path):
             full_dest.write_bytes(src.read())
 
 
+def _find_cluster_structures(tmpdir, name):
+    """Return the per-cluster minimum-energy structure files written by write_cluster_report.
+
+    pymuonsuite builds the seedname as ``<name>_<calc>_min_cluster_<i>`` and writes it with
+    ``os.path.join(clustering_save_path, seedname)``. Because cluster_muon_sites sets
+    params["name"] to an absolute path (so the report lands in the temp dir), the seedname is
+    absolute too and os.path.join discards clustering_save_path — the structures end up at the
+    temp dir root instead of under ``<name>_clusters/<calc>/``. Look in both places so this
+    keeps working if that is ever fixed upstream.
+    """
+    tmpdir = Path(tmpdir)
+    found = {}
+    for path in sorted(tmpdir.glob(f"{name}_*_min_cluster_*")):
+        if path.is_file():
+            found[path.name] = path
+    clusters_dir = tmpdir / f"{name}_clusters"
+    if clusters_dir.is_dir():
+        for path in sorted(clusters_dir.rglob("*")):
+            if path.is_file():
+                found.setdefault(path.name, path)
+    return list(found.values())
+
+
+def _structure_data_from_atoms(atoms) -> StructureData:
+    """Convert a muonated ASE Atoms into a StructureData that CASTEP reads correctly.
+
+    pymuonsuite marks the muon in the ``castep_custom_species`` array as ``H:mu``
+    rather than in the chemical symbols, and AiiDA's own ASE import ignores that
+    array — the muon would silently become ordinary hydrogen. Giving it a Kind
+    named after the label makes aiida-castep write ``H:mu`` in POSITIONS_ABS (it
+    emits ``symbol:kind_name`` whenever the two differ), which is what the
+    SPECIES_MASS and SPECIES_GAMMA blocks key off.
+    """
+    structure = StructureData(cell=atoms.cell.tolist())
+    structure.set_pbc(atoms.pbc.tolist())
+
+    species = atoms.arrays.get("castep_custom_species")
+    if species is None:
+        species = atoms.get_chemical_symbols()
+
+    for atom, spec in zip(atoms, species):
+        symbol, _, label = str(spec).partition(":")
+        if label:
+            structure.append_atom(position=tuple(atom.position), symbols=symbol, name=label)
+        else:
+            structure.append_atom(position=tuple(atom.position), symbols=atom.symbol)
+    return structure
+
+
 class MuairssUepWorkChain(WorkChain):
     """WorkChain: MuairssCalculation → batched UepOptCalculation per candidate → collect results."""
 
@@ -80,6 +129,12 @@ class MuairssUepWorkChain(WorkChain):
         )
 
         spec.output("muon_sites", valid_type=FolderData, help="All .uep results merged into one FolderData.")
+        spec.output(
+            "allpos_file",
+            valid_type=SinglefileData,
+            required=False,
+            help="allpos structure file from MuairssCalculation — only present when allpos_ext is set.",
+        )
 
         spec.exit_code(400, "ERROR_MUAIRSS_FAILED", message="MuairssCalculation failed.")
         spec.exit_code(401, "ERROR_ALL_UEP_FAILED", message="All UepOptCalculations failed.")
@@ -104,8 +159,7 @@ class MuairssUepWorkChain(WorkChain):
         folder = calc.outputs.candidates_folder
         yaml_paths = [p for p in _list_files_recursive(folder) if p.endswith(".yaml")]
         self.report(
-            f"Found {len(yaml_paths)} candidate YAMLs — "
-            f"processing in batches of {self.inputs.max_concurrent.value}."
+            f"Found {len(yaml_paths)} candidate YAMLs — processing in batches of {self.inputs.max_concurrent.value}."
         )
 
         # Store all yaml nodes upfront as (key, pk) pairs so the pending list is safely checkpointed.
@@ -184,12 +238,21 @@ class MuairssUepWorkChain(WorkChain):
         self.out("muon_sites", muon_sites)
         self.report(f"Collected muon_sites FolderData from {len(kwargs)} candidates.")
 
+        if "allpos_file" in self.ctx.muairss_calc.outputs:
+            self.out("allpos_file", self.ctx.muairss_calc.outputs.allpos_file)
+
 
 @calcfunction
 def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parameters: UepParameters) -> dict[str, Data]:
     """Cluster UEP candidate sites using pymuonsuite directly (no scheduler job).
 
-    Returns cluster_report (SinglefileData) and cluster_data (Dict).
+    Returns cluster_report (SinglefileData), cluster_data (Dict) and site_structures (one
+    StructureData per cluster, the minimum-energy structure in the requested supercell with
+    the muon as its own Kind) — the input for a final DFT relaxation of each candidate
+    stopping site. cluster_structures (FolderData) additionally holds those structures as
+    files when the parameters ask for them to be saved (clustering_save_type /
+    clustering_save_format); only the CELL format preserves the muon label on re-reading,
+    which is why site_structures is built in memory rather than parsed back from disk.
     """
     import warnings
     from types import SimpleNamespace
@@ -197,6 +260,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
     from ase import io as ase_io
     from pymuonsuite.io.output import write_cluster_report
     from pymuonsuite.muairss import load_muairss_collection, muairss_cluster
+    from pymuonsuite.utils import make_muonated_supercell
 
     with tempfile.TemporaryDirectory() as tmpdir_name:
         tmpdir = Path(tmpdir_name)
@@ -239,6 +303,7 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
                     file=io.BytesIO(b"No results to cluster."), filename="muon_clusters.txt"
                 ),
                 "cluster_data": Dict(dict={}),
+                "site_structures": {},
             }
 
         with warnings.catch_warnings():
@@ -255,21 +320,52 @@ def cluster_muon_sites(structure: SinglefileData, muon_sites: FolderData, parame
         report_path = tmpdir / f"{params['name']}_clusters.txt"
         cluster_report = SinglefileData(file=str(report_path))
 
-        # Build cluster_data: {calc_name: {cluster_id: {n, E_min}}}
+        # Keep the saved cluster structures — they are written into the temp dir and would
+        # otherwise be discarded with it.
+        cluster_structures = None
+        structure_paths = _find_cluster_structures(tmpdir, params["name"])
+        if structure_paths:
+            cluster_structures = FolderData()
+            for struct_file in structure_paths:
+                with open(struct_file, "rb") as f:
+                    cluster_structures.put_object_from_filelike(f, struct_file.name)
+
+        # Build cluster_data {calc_name: {cluster_id: {n, E_min}}} plus one StructureData per
+        # cluster. Iterate cgroups rather than the raw cluster-ID array so the numbering used
+        # here is the same "Cluster N" the report shows — write_cluster_report enumerates
+        # cgroups too. Getting this wrong would silently pair a cluster's report entry with a
+        # different cluster's structure.
+        #
+        # site_structures keys assume a single calculator, which holds because render_yaml
+        # always injects `calculator: uep`.
         import numpy as np
 
-        cluster_dict = {}
-        for calc_name, (cl, classified, gvecs) in clusters.items():
-            cinds = cl[0]  # cl is (cinds, cgroups); cinds is shape (n_structures,)
-            cluster_dict[calc_name] = {}
-            for cid in set(cinds.tolist()):
-                mask = np.where(cinds == cid)[0]
-                cluster_dict[calc_name][str(cid)] = {
-                    "n": int(len(mask)),
-                    "E_min": float(np.min(gvecs[mask, 0])),
-                }
+        supercell = params.setdefault("supercell", 1)
+        mu_symbol = params.setdefault("mu_symbol", "H:mu")
 
-    return {
+        cluster_dict = {}
+        site_structures = {}
+        for calc_name, ((_cinds, cgroups), ccolls, gvecs) in clusters.items():
+            cluster_dict[calc_name] = {}
+            for index, group in enumerate(cgroups):
+                cid = index + 1
+                energies = gvecs[group, 0]
+                cluster_dict[calc_name][str(cid)] = {
+                    "n": len(group),
+                    "E_min": float(np.min(energies)),
+                }
+                # The cluster's lowest-energy structure, expanded to the requested supercell.
+                # make_muonated_supercell keeps the muon last and re-labels it as mu_symbol.
+                best = ccolls[cid][int(np.argmin(energies))].structures[0]
+                site_structures[f"cluster_{cid}"] = _structure_data_from_atoms(
+                    make_muonated_supercell(best, supercell, mu_symbol)
+                )
+
+    results = {
         "cluster_report": cluster_report,
         "cluster_data": Dict(dict=cluster_dict),
+        "site_structures": site_structures,
     }
+    if cluster_structures is not None:
+        results["cluster_structures"] = cluster_structures
+    return results

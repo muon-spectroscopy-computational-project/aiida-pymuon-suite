@@ -2,11 +2,49 @@
 
 # aiida-pymuon-suite
 
-Aiida plugin for pymuon-suite
+AiiDA plugin for [pymuon-suite](https://github.com/muon-spectroscopy-computational-project/pymuon-suite):
+muon stopping-site prediction with the UEP (Unperturbed Electrostatic Potential) method,
+run as AiiDA workchains with full provenance.
 
-This plugin is the default output of the
-[AiiDA plugin cutter](https://github.com/aiidateam/aiida-plugin-cutter),
-intended to help developers get started with their AiiDA plugins.
+## Finding muon stopping sites
+
+The UEP pipeline is: `pm-muairss` generates N random muon candidate positions (AIRSS),
+N `pm-uep-opt` jobs relax each one in the electrostatic potential derived from a CASTEP
+charge density of the pristine host, and a clustering step identifies the distinct sites.
+
+Four entry points, depending on what you start from:
+
+| You have | Use | Entry point |
+|---|---|---|
+| `.cell` + `.den_fmt` + `.castep` files | `MuairssUepWorkChain` | `pymuon.muairss_uep` |
+| A structure + the CASTEP files | `CastepMuairssUepWorkChain` route B | `pymuon.castep_muairss_uep` |
+| Only a structure (CASTEP run by AiiDA) | `CastepMuairssUepWorkChain` route A | `pymuon.castep_muairss_uep` |
+| A structure + a finished CASTEP calc in the DB | `CastepMuairssUepWorkChain` route C | `pymuon.castep_muairss_uep` |
+
+`CastepMuairssUepWorkChain` takes a `StructureData` plus **exactly one** charge-density
+source: the `castep` input namespace (route A — an
+[`aiida-castep`](https://github.com/zhubonan/aiida-castep) `CastepBaseWorkChain` runs on
+the pristine host first), `charge_density` + `castep_log` `SinglefileData` inputs
+(route B), or `castep_retrieved` — the retrieved `FolderData` of a finished CASTEP
+calculation already in your database (route C). In route A the workchain injects
+`write_formatted_density: true` into PARAM and adds `*.den_fmt` to the retrieve list
+automatically — your CASTEP inputs don't need to know anything about UEP. Outputs
+(`muon_sites`, `allpos_file`) are identical for all entry points.
+
+Route A requires the optional `aiida-castep` dependency:
+
+```shell
+pip install -e '.[castep]'
+```
+
+Without it, `MuairssUepWorkChain` and routes B and C work as normal.
+
+See [`examples/`](examples/): `example_01.py` (inner workchain + clustering),
+`example_02_castep_route_b.py` (manual files), `example_03_castep_route_a.py`
+(CASTEP on a cluster; the shipped settings are verified end-to-end on STFC SCARF).
+
+This plugin was originally generated with the
+[AiiDA plugin cutter](https://github.com/aiidateam/aiida-plugin-cutter).
 
 ## Repository contents
 
