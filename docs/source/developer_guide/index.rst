@@ -2,101 +2,84 @@
 Developer guide
 ===============
 
+The project uses `hatch <https://hatch.pypa.io>`_ to run the tests, the linter
+and the documentation build. Install it once with ``pip install hatch``.
+
 Running the tests
 +++++++++++++++++
 
-The following will discover and run all unit test::
+Run the test suite with::
 
-    pip install --upgrade pip
-    pip install -e .[testing]
+    hatch test
+
+or, in an environment where the package is already installed::
+
+    pip install -e '.[testing]'
     pytest -v
 
-You can also run the tests in a virtual environment with `tox <https://tox.wiki/en/latest/>`_::
+``hatch test --all`` runs the suite on every Python version in the hatch matrix
+(3.9 to 3.12), and ``hatch test --cover`` adds a coverage report.
 
-    pip install tox tox-conda
-    tox -e py38 -- -v
+The tests run real ``pm-muairss`` and ``pm-uep-opt`` jobs on the silicon
+fixtures in ``tests/input_files/``, so both executables must be on your
+``PATH``; they are installed with ``pymuon-suite``. A full run takes a few
+minutes. The test profile uses SQLite and needs no PostgreSQL or RabbitMQ.
 
-Automatic coding style checks
-+++++++++++++++++++++++++++++
+Code style
+++++++++++
 
-Enable enable automatic checks of code sanity and coding style::
+Formatting and linting use `ruff <https://docs.astral.sh/ruff/>`_, configured in
+``pyproject.toml`` (line length 120). To fix what can be fixed automatically::
 
-    pip install -e .[pre-commit]
-    pre-commit install
+    hatch fmt
 
-After this, the `black <https://black.readthedocs.io>`_ formatter,
-the `pylint <https://www.pylint.org/>`_ linter
-and the `pylint <https://www.pylint.org/>`_ code analyzer will
-run at every commit.
+To check without changing any files, as CI does::
 
-If you ever need to skip these pre-commit hooks, just use::
-
-    git commit -n
-
-You should also keep the pre-commit hooks up to date periodically, with::
-
-    pre-commit autoupdate
-
-Or consider using `pre-commit.ci <https://pre-commit.ci/>`_.
+    hatch fmt --check
 
 Continuous integration
 ++++++++++++++++++++++
 
-``aiida-pymuon-suite`` comes with a ``.github`` folder that contains continuous integration tests on every commit using `GitHub Actions <https://github.com/features/actions>`_. It will:
+``.github/workflows/ci.yml`` runs on every push to ``main`` and ``dev`` and on
+every pull request. It:
 
-#. run all tests
-#. build the documentation
-#. check coding style and version number (not required to pass by default)
+#. checks formatting and linting with ``hatch fmt --check``;
+#. runs the tests on Python 3.10, 3.11 and 3.12;
+#. builds the sdist and wheel, and checks that the wheel installs and registers
+   its AiiDA entry points;
+#. builds the container image. Running the workflow by hand with ``push_image``
+   set also pushes the image to Harbor, which is how test instances get an image
+   to deploy.
+
+The documentation is not built in CI.
 
 Building the documentation
 ++++++++++++++++++++++++++
 
- #. Install the ``docs`` extra::
+The pages are in ``docs/source/``. Build them with::
 
-        pip install -e .[docs]
+    pip install -e '.[docs]'
+    make -C docs html
 
- #. Edit the individual documentation pages::
+and open ``docs/build/html/index.html`` in your browser. The build regenerates
+the API pages in ``docs/source/apidoc/`` from the code.
 
-        docs/source/index.rst
-        docs/source/developer_guide/index.rst
-        docs/source/user_guide/index.rst
-        docs/source/user_guide/get_started.rst
-        docs/source/user_guide/tutorial.rst
+``hatch run docs:build`` (or plain ``make -C docs``) runs a strict build that
+treats every warning as an error. It does not pass yet, because some
+cross-references to AiiDA classes do not resolve.
 
- #. Use `Sphinx`_ to generate the html documentation::
+The documentation is not published online yet.
 
-        cd docs
-        make
+Making a release
+++++++++++++++++
 
-Check the result by opening ``build/html/index.html`` in your browser.
+#. Set ``__version__`` in ``src/aiida_pymuon_suite/__init__.py``.
+#. Commit, then tag the commit with the same version and push the tag::
 
-Publishing the documentation
-++++++++++++++++++++++++++++
+       git tag -a v0.1.0 -m 'v0.1.0'
+       git push origin v0.1.0
 
-Once you're happy with your documentation, it's easy to host it online on ReadTheDocs_:
-
- #. Create an account on ReadTheDocs_
-
- #. Import your ``aiida-pymuon-suite`` repository (preferably using ``aiida-pymuon-suite`` as the project name)
-
-The documentation is now available at `aiida-pymuon-suite.readthedocs.io <http://aiida-pymuon-suite.readthedocs.io/>`_.
-
-PyPI release
-++++++++++++
-
-Your plugin is ready to be uploaded to the `Python Package Index <https://pypi.org/>`_.
-Just register for an account and use `flit <https://flit.readthedocs.io/en/latest/upload.html>`_::
-
-    pip install flit
-    flit publish
-
-After this, you (and everyone else) should be able to::
-
-    pip install aiida-pymuon-suite
-
-You can also enable *automatic* deployment of git tags to the python package index:
-simply generate a `PyPI API token <https://pypi.org/help/#apitoken>`_ for your PyPI account and add it as a secret to your GitHub repository under the name ``pypi_token`` (Go to Settings -> Secrets).
-
-
-.. _ReadTheDocs: https://readthedocs.org/
-.. _Sphinx: https://www.sphinx-doc.org/en/master/
+Pushing a ``v*`` tag starts ``.github/workflows/release.yml``. It reruns the
+full CI checks, checks that the tag matches ``__version__``, creates a GitHub
+release with the sdist and wheel attached, and pushes the container image to
+Harbor, tagged with the version. The package is not published to PyPI.
