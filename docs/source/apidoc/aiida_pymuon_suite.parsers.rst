@@ -4,6 +4,16 @@ aiida\_pymuon\_suite.parsers package
 Submodules
 ----------
 
+aiida\_pymuon\_suite.parsers.castep\_muon module
+------------------------------------------------
+
+.. automodule:: aiida_pymuon_suite.parsers.castep_muon
+   :members:
+   :private-members:
+   :show-inheritance:
+   :special-members:
+   :undoc-members:
+
 aiida\_pymuon\_suite.parsers.muairss module
 -------------------------------------------
 

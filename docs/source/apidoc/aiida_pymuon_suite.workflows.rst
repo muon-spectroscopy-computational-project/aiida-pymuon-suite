@@ -4,6 +4,16 @@ aiida\_pymuon\_suite.workflows package
 Submodules
 ----------
 
+aiida\_pymuon\_suite.workflows.castep\_muairss\_uep module
+----------------------------------------------------------
+
+.. automodule:: aiida_pymuon_suite.workflows.castep_muairss_uep
+   :members:
+   :private-members:
+   :show-inheritance:
+   :special-members:
+   :undoc-members:
+
 aiida\_pymuon\_suite.workflows.muairss\_uep module
 --------------------------------------------------
 
