@@ -33,7 +33,7 @@ workchain can run the host calculation itself. Provide the
         "calc": {
             "code": castep_code,
             "parameters": Dict({
-                "PARAM": {"task": "singlepoint", "xc_functional": "pbe", "cut_off_energy": 350},
+                "PARAM": {"task": "singlepoint", "xc_functional": "pbe"},
                 "CELL": {"symmetry_generate": True},
             }),
         },
@@ -123,6 +123,10 @@ Code  Label                         Meaning
 ===== ============================= ==============================================
 
 See ``examples/example_03_castep_route_a.py`` and
-``examples/example_02_castep_route_b.py`` for complete runnable scripts; the
-route A settings shipped there were verified end-to-end on STFC SCARF
-(CASTEP 26.1, Si, minutes on a devel partition).
+``examples/example_02_castep_route_b.py`` for complete runnable scripts.
+The CASTEP settings shown are a general-purpose starting point, not tuned for
+any particular material. No cutoff is set, so CASTEP chooses one for the
+elements and pseudopotentials present (its default ``basis_precision`` of
+``FINE``); k-point sampling (denser for metals) and other
+parameters should be reviewed for your system. The route A pipeline has been
+run end-to-end on STFC SCARF with the Si example.

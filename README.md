@@ -41,7 +41,8 @@ Without it, `MuairssUepWorkChain` and routes B and C work as normal.
 
 See [`examples/`](examples/): `example_01.py` (inner workchain + clustering),
 `example_02_castep_route_b.py` (manual files), `example_03_castep_route_a.py`
-(CASTEP on a cluster; the shipped settings are verified end-to-end on STFC SCARF).
+(CASTEP on a cluster; the pipeline has been run end-to-end on STFC SCARF with the Si example —
+the CASTEP settings are a general starting point, review them for your material).
 
 This plugin was originally generated with the
 [AiiDA plugin cutter](https://github.com/aiidateam/aiida-plugin-cutter).

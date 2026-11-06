@@ -13,9 +13,13 @@ Requirements beyond example_02:
         from aiida_castep.data.otfg import upload_otfg_family
         upload_otfg_family(["C19"], "C19", "C19 library", stop_if_existing=False)
 
-The CASTEP settings below (PBE, 350 eV, k-spacing 0.1/Å, C19 OTFG) are the
-configuration verified end-to-end on STFC SCARF (CASTEP 26.1, 4 MPI procs,
-minutes on a devel partition).
+The CASTEP settings below (PBE, C19 OTFG, k-spacing 0.1/Å) are a sensible
+general-purpose starting point rather than anything specific to a machine or
+CASTEP version; metals may need denser k-point sampling. The plane-wave cutoff
+is set through `basis_precision` instead of a fixed `cut_off_energy`, so CASTEP
+picks it from the elements and pseudopotentials actually present. Review these
+choices for your material. The route A pipeline itself has been run end-to-end
+on STFC SCARF with this Si example.
 
 Usage:
     ./example_03_castep_route_a.py --castep-code castep@my-cluster \
@@ -64,7 +68,7 @@ def run_workflow(castep_code, muairss_code, uep_code, pseudos_family, mpi_procs)
                     "PARAM": {
                         "task": "singlepoint",
                         "xc_functional": "pbe",
-                        "cut_off_energy": 350,
+                        "basis_precision": "fine",
                     },
                     "CELL": {"symmetry_generate": True},
                 }
