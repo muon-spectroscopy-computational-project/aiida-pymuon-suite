@@ -37,7 +37,11 @@ class MuairssCalculation(CalcJob):
             "allpos_file",
             valid_type=SinglefileData,
             required=False,
-            help="allpos structure file (e.g. allpos.xyz) — only present when allpos_ext is set.",
+            help=(
+                "'All positions' file (e.g. allpos.xyz): the host structure plus every generated muon "
+                "candidate position (initial, before UEP relaxation) in one file, muons labelled with "
+                "mu_symbol, for visualising the sampling. Only present when allpos_ext is set."
+            ),
         )
 
         spec.exit_code(300, "ERROR_NO_CANDIDATES", message="pm-muairss generated no candidate structures.")

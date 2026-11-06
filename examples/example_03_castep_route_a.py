@@ -26,16 +26,17 @@ Usage:
         --muairss-code pm-muairss@localhost --uep-code pm-uep-opt@localhost
 """
 
-from os import path
+from pathlib import Path
 
+import ase.io
 import click
 from aiida import cmdline, engine
 from aiida.orm import Dict, Float, Str, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-from aiida_pymuon_suite import helpers
-from ase import io as ase_io
 
-INPUT_DIR = path.join(path.dirname(path.abspath(__file__)), "input_files")
+from aiida_pymuon_suite import helpers
+
+INPUT_DIR = Path(__file__).parent / "input_files"
 
 
 def run_workflow(castep_code, muairss_code, uep_code, pseudos_family, mpi_procs):
@@ -48,7 +49,7 @@ def run_workflow(castep_code, muairss_code, uep_code, pseudos_family, mpi_procs)
         uep_code = helpers.get_code(entry_point="pymuon.uep_opt", computer=computer)
 
     uep_parameters = DataFactory("pymuon.uep")
-    structure = StructureData(ase=ase_io.read(path.join(INPUT_DIR, "Si.cell")))
+    structure = StructureData(ase=ase.io.read(INPUT_DIR / "Si.cell"))
 
     castep_inputs = {
         "kpoints_spacing": Float(0.1),

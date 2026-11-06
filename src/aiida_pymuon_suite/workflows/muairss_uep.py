@@ -133,7 +133,11 @@ class MuairssUepWorkChain(WorkChain):
             "allpos_file",
             valid_type=SinglefileData,
             required=False,
-            help="allpos structure file from MuairssCalculation — only present when allpos_ext is set.",
+            help=(
+                "'All positions' file from MuairssCalculation: the host structure plus every generated "
+                "muon candidate position (before UEP relaxation) in one file. Only present when "
+                "allpos_ext is set."
+            ),
         )
 
         spec.exit_code(400, "ERROR_MUAIRSS_FAILED", message="MuairssCalculation failed.")
