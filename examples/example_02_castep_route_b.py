@@ -12,16 +12,17 @@ Usage:
     ./example_02_castep_route_b.py
 """
 
-from os import path
+from pathlib import Path
 
 import click
 from aiida import cmdline, engine
 from aiida.orm import Int, SinglefileData, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-from aiida_pymuon_suite import helpers
 from ase import io as ase_io
 
-INPUT_DIR = path.join(path.dirname(path.abspath(__file__)), "input_files")
+from aiida_pymuon_suite import helpers
+
+INPUT_DIR = Path(__file__).parent / "input_files"
 
 
 def run_workflow(muairss_code, uep_code, max_concurrent):
@@ -36,14 +37,14 @@ def run_workflow(muairss_code, uep_code, max_concurrent):
     uep_parameters = DataFactory("pymuon.uep")
     parameters = uep_parameters({"geom_steps": 30})
 
-    structure = StructureData(ase=ase_io.read(path.join(INPUT_DIR, "Si.cell")))
+    structure = StructureData(ase=ase_io.read(INPUT_DIR / "Si.cell"))
 
     print("Running CastepMuairssUepWorkChain (route B: files provided manually) ...")
     result, node = engine.run_get_node(
         WorkflowFactory("pymuon.castep_muairss_uep"),
         structure=structure,
-        charge_density=SinglefileData(file=path.join(INPUT_DIR, "Si.den_fmt")),
-        castep_log=SinglefileData(file=path.join(INPUT_DIR, "Si.castep")),
+        charge_density=SinglefileData(file=INPUT_DIR / "Si.den_fmt"),
+        castep_log=SinglefileData(file=INPUT_DIR / "Si.castep"),
         muairss_code=muairss_code,
         uep_code=uep_code,
         parameters=parameters,
