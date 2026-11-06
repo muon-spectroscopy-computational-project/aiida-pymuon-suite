@@ -39,6 +39,11 @@ class UepOptCalculation(CalcJob):
         )
 
         spec.exit_code(301, "ERROR_NO_UEP_FILE", message="pm-uep-opt did not produce a .uep output file.")
+        spec.exit_code(
+            302,
+            "ERROR_EMPTY_UEP_FILE",
+            message="pm-uep-opt produced an empty .uep file; the optimisation failed. See pm-uep-opt.stdout.",
+        )
 
     def prepare_for_submission(self, folder):
         # Patch chden_path/chden_seed to point at the AiiDA working directory

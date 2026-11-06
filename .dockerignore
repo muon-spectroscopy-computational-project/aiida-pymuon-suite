@@ -1,0 +1,13 @@
+.git
+.github
+.devcontainer
+.venv
+.ruff_cache
+.pytest_cache
+**/__pycache__
+*.egg-info
+dist
+build
+docs/build
+.coverage
+coverage.xml

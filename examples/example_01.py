@@ -101,6 +101,14 @@ def run_workflow(muairss_code, uep_code, max_concurrent):
         for cid, info in sorted(clusters.items(), key=lambda x: x[1]["E_min"]):
             print(f"  Cluster {cid}: {info['n']} structures, E_min = {info['E_min']:.4f} eV")
 
+    # One StructureData per cluster, ready to hand to a CASTEP geometry optimisation.
+    print("--- Site structures ---")
+    site_structures = cluster_result["site_structures"]
+    for key in sorted(site_structures, key=lambda k: int(k.rpartition("_")[2])):
+        site = site_structures[key]
+        kinds = ", ".join(f"{k.name}({k.symbol})" for k in site.kinds)
+        print(f"  {key}: StructureData<{site.pk}>, {len(site.sites)} atoms, kinds: {kinds}")
+
 
 @click.command()
 @cmdline.utils.decorators.with_dbenv()
