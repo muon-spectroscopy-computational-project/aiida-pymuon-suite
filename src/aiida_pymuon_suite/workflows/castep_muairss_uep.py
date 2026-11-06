@@ -7,7 +7,7 @@ the SinglefileData nodes the workchain expects, and an outer workchain that
 either runs CASTEP itself (route A), takes the files directly (route B), or
 reuses the retrieved folder of a finished CASTEP calculation (route C).
 
-aiida-castep is an optional dependency (``pip install -e '.[castep]'``);
+aiida-castep is an optional dependency (``pip install '.[castep]'``);
 without it only route A is unavailable — routes B and C still work.
 """
 
@@ -193,7 +193,7 @@ def validate_workchain_inputs(inputs, _):
     )
     if has_aiida_castep():
         return message + " or the 'castep' namespace (route A)"
-    return message + "; route A requires aiida-castep (pip install -e '.[castep]')"
+    return message + "; route A requires aiida-castep (pip install '.[castep]')"
 
 
 class CastepMuairssUepWorkChain(WorkChain):

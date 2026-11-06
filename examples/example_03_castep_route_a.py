@@ -7,7 +7,7 @@ and the `*.den_fmt` retrieve entry are injected automatically — the CASTEP
 inputs below need to know nothing about UEP.
 
 Requirements beyond example_02:
-  * `pip install -e '.[castep]'` (aiida-castep)
+  * `pip install '.[castep]'` (aiida-castep)
   * a configured CASTEP code (e.g. `castep@my-cluster`)
   * an OTFG pseudopotential family, e.g.:
         from aiida_castep.data.otfg import upload_otfg_family

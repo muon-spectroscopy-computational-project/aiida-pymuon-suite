@@ -158,7 +158,7 @@ if _BASE is None:  # pragma: no cover - exercised only without aiida-castep
         """Placeholder used when aiida-castep is not installed."""
 
         def parse(self, **kwargs):
-            raise ImportError("pymuon.castep_muon requires aiida-castep: pip install -e '.[castep]'")
+            raise ImportError("pymuon.castep_muon requires aiida-castep: pip install '.[castep]'")
 
 else:
 

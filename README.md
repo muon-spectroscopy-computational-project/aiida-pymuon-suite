@@ -34,7 +34,7 @@ automatically — your CASTEP inputs don't need to know anything about UEP. Outp
 Route A requires the optional `aiida-castep` dependency:
 
 ```shell
-pip install -e '.[castep]'
+pip install '.[castep]'
 ```
 
 Without it, `MuairssUepWorkChain` and routes B and C work as normal.

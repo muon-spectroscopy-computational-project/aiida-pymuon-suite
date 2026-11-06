@@ -13,7 +13,7 @@ Route A — let AiiDA run CASTEP
 ------------------------------
 
 With the optional `aiida-castep <https://github.com/zhubonan/aiida-castep>`_
-dependency installed (``pip install -e '.[castep]'``), the
+dependency installed (``pip install '.[castep]'``), the
 workchain can run the host calculation itself. Provide the
 ``CastepBaseWorkChain`` inputs under the ``castep`` namespace::
 
