@@ -18,9 +18,8 @@ import click
 from aiida import cmdline, engine
 from aiida.orm import Int, SinglefileData, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-from ase import io as ase_io
-
 from aiida_pymuon_suite import helpers
+from ase import io as ase_io
 
 INPUT_DIR = Path(__file__).parent / "input_files"
 

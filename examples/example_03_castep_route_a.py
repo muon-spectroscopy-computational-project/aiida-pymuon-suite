@@ -33,7 +33,6 @@ import click
 from aiida import cmdline, engine
 from aiida.orm import Dict, Float, Str, StructureData
 from aiida.plugins import DataFactory, WorkflowFactory
-
 from aiida_pymuon_suite import helpers
 
 INPUT_DIR = Path(__file__).parent / "input_files"
